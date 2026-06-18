@@ -94,6 +94,14 @@
   .chip.add{font-family:var(--sans);font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-faint);font-weight:600}
   .card .cap{font-size:14.5px;color:var(--ink-soft);margin:0;line-height:1.5}
   .card .meta{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);margin-top:10px;font-weight:600}
+  .meta-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+  .meta-row .meta{margin-top:0}
+  .card-share{font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);border:0;border-radius:999px;padding:8px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--shadow-sm)}
+  .card-share svg{width:15px;height:15px}
+  .card-share:active{transform:translateY(1px)}
+  .mic-sm{width:48px;height:48px;flex:0 0 auto;border-radius:14px;border:.5px solid var(--line-2);background:var(--card);color:var(--ink);display:grid;place-items:center;cursor:pointer}
+  .mic-sm svg{width:20px;height:20px}
+  .mic-sm.live{background:var(--green);color:#fff;border-color:transparent;animation:micpulse 1.5s infinite}
   /* stats */
   .stats{display:flex;background:var(--card);border-radius:16px;box-shadow:var(--shadow-sm);margin:18px 0 26px;overflow:hidden}
   .stat{flex:1;padding:15px 6px 13px;text-align:center;border-left:.5px solid var(--line)}
@@ -328,7 +336,7 @@ function renderCaptureSheet(){
     <div class="grip"></div>
     <h2>Who did you meet?</h2>
     <div class="preview-wrap"><img src="${pending.url}" alt=""></div>
-    <input type="text" id="nameInput" placeholder="Type a name, then Enter" autocomplete="off" autocapitalize="words">
+    <div style="display:flex;gap:8px;align-items:center"><input type="text" id="nameInput" placeholder="Type or say a name" autocomplete="off" autocapitalize="words" style="flex:1">${SR?'<button class="mic-sm" id="nameMic" aria-label="Speak the name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>':''}</div>
     <div class="added" id="added">${pending.names.map(n=>{ const c=pcolor(n);
       return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("")}</div>
     ${recent.length?`<div class="suggest">${recent.map(n=>`<button class="s" data-s="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}
@@ -340,6 +348,7 @@ function renderCaptureSheet(){
     </div>`;
   const input=document.getElementById("nameInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addName(input.value); input.value=""; }});
+  const nMic=document.getElementById("nameMic"); if(nMic) nMic.onclick=dictateName;
   document.querySelectorAll("#added .tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderCaptureSheet(); });
   document.querySelectorAll("#sheet .s").forEach(b=>b.onclick=()=>addName(b.dataset.s));
   document.getElementById("capSaveOnly").onclick=()=>saveMoment(false);
@@ -347,6 +356,13 @@ function renderCaptureSheet(){
 }
 function addName(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
   renderCaptureSheet(); document.getElementById("nameInput")?.focus(); }
+function dictateName(){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ return; }
+  r2.lang=navigator.language||"en-US"; r2.interimResults=true;
+  const inp=document.getElementById("nameInput"), btn=document.getElementById("nameMic"); if(btn) btn.classList.add("live");
+  r2.onresult=e=>{ let t=""; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; if(inp) inp.value=t; };
+  r2.onerror=()=>{ if(btn) btn.classList.remove("live"); };
+  r2.onend=()=>{ if(btn) btn.classList.remove("live"); const v=inp&&inp.value.trim(); if(v) addName(v); };
+  try{ r2.start(); }catch(_){ if(btn) btn.classList.remove("live"); } }
 function closeCaptureSheet(){ if(typeof stopRec==="function") stopRec(); hideSheet("sheet","scrim"); if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]}; }
 async function saveMoment(shareAfter){
   const note=document.getElementById("capNote").value.trim();
@@ -414,12 +430,16 @@ function meetingCardHTML(m,i=0){
     ${m.photo?`<img class="ph" src="${photoURL(m)}" loading="lazy">`:""}
     <div class="body"><div class="who">${chips}</div>
     ${m.caption?`<div class="cap">${esc(m.caption)}</div>`:""}
-    <div class="meta">${timeStr(m.createdAt)}</div></div></div>`;
+    <div class="meta-row"><span class="meta">${timeStr(m.createdAt)}</span>${ppl.length?`<button class="card-share" data-mid="${m.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Send card</button>`:""}</div></div></div>`;
 }
 function wireCards(root){
   root.querySelectorAll(".chip[data-pid]").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
   root.querySelectorAll(".chip.add").forEach(c=>c.onclick=()=>retag(c.closest(".card").dataset.mid));
+  root.querySelectorAll(".card-share").forEach(b=>b.onclick=e=>{ e.stopPropagation(); shareFromCard(b.dataset.mid); });
 }
+function shareFromCard(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m||!m.personIds.length) return;
+  showSheet("sheet2","scrim2");
+  presentCard(m.personIds[0], {sheet:"sheet2",scrim:"scrim2",backLabel:"Done",onBack:()=>hideSheet("sheet2","scrim2")}); }
 function retag(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m) return;
   pending={ blob:m.photo, url:m.photo?URL.createObjectURL(m.photo):"", names:[] };
   renderCaptureSheet(); showSheet("sheet","scrim");
@@ -538,7 +558,20 @@ async function saveVoiceMoment(shareAfter){
 
 /* ========================= invite / claim ========================= */
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
-function getMyName(){ let n=localStorage.getItem("wim_my_name")||""; if(!n){ n=(prompt("Your name (shown on the invites you send)")||"").trim(); if(n) localStorage.setItem("wim_my_name",n); } return n||"A friend"; }
+function getMyName(){ return (localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
+function ensureMyName(){ if(localStorage.getItem("wim_my_name")) return;
+  document.getElementById("sheet").innerHTML=`
+    <div class="grip"></div>
+    <h2>What&rsquo;s your name?</h2>
+    <p style="font-size:14px;color:var(--ink-soft);margin:0 0 14px">It goes on the we-met cards you send — first name is fine.</p>
+    <input type="text" id="onbName" placeholder="e.g. Walter" autocomplete="off" autocapitalize="words">
+    <div class="sheet-actions"><button class="btn btn-primary" id="onbSave" style="flex:1">Continue</button></div>`;
+  showSheet("sheet","scrim");
+  const save=()=>{ const v=document.getElementById("onbName").value.trim(); if(!v) return; localStorage.setItem("wim_my_name",v); hideSheet("sheet","scrim"); };
+  document.getElementById("onbSave").onclick=save;
+  document.getElementById("onbName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); save(); }});
+  setTimeout(()=>{ const el=document.getElementById("onbName"); if(el) el.focus(); },320);
+}
 async function invitePerson(pid){ const p=personById(pid); if(!p) return;
   const me=getMyName(), first=p.name.split(" ")[0];
   const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name);
@@ -626,7 +659,7 @@ window._seedDemo=async function(){
   await loadAll(); renderAll(); toast("Demo data loaded"); console.log("seeded"); };
 
 /* ========================= boot ========================= */
-(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); }
+(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName(); }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
 </body>
