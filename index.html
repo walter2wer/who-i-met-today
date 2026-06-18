@@ -164,6 +164,7 @@
   .pd-head .nm{font-family:var(--serif);font-size:24px;font-weight:600;line-height:1.1}
   .pd-head .ct{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);margin-top:6px;font-weight:600}
   .pd-actions{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}
+  .dot.inv{background:var(--gold);animation:none}
   .mini{font-size:12.5px;font-weight:600;padding:9px 15px;border:.5px solid var(--line-2);
     background:var(--card);color:var(--ink);cursor:pointer;border-radius:999px;box-shadow:var(--shadow-sm)}
   .mini.on{background:var(--green);color:#fff;border-color:transparent}
@@ -364,7 +365,8 @@ function renderPerson(pid){ const p=personById(pid); if(!p) return;
     <div class="grip"></div>
     <div class="pd-head">${avaHTML(p)}
       <div><div class="nm">${esc(p.name)}</div>
-      <div class="ct">${ms.length} moment${ms.length===1?"":"s"} · last ${last}</div></div></div>
+      <div class="ct">${ms.length} moment${ms.length===1?"":"s"} · last ${last}${p.invited?" · invited":""}</div></div></div>
+    <button class="btn btn-primary" id="pdInvite" style="width:100%;margin:16px 0 4px">${p.invited?"Re-send invite":"Invite to HiRey"}</button>
     <div class="pd-actions">
       <button class="mini ${p.followUp?"on":""}" id="pdFollow">${p.followUp?"Following up":"Follow up"}</button>
       <button class="mini" id="pdRename">Rename</button>
@@ -375,6 +377,7 @@ function renderPerson(pid){ const p=personById(pid); if(!p) return;
     <div class="thumbs">${ms.map(m=>m.photo?`<img src="${photoURL(m)}">`:"").join("")||'<div class="ct">No photos yet.</div>'}</div>
     <div class="sheet-actions"><button class="btn btn-ghost" id="pdClose">Close</button></div>`;
   document.getElementById("pdClose").onclick=()=>hideSheet("sheet2","scrim2");
+  document.getElementById("pdInvite").onclick=()=>invitePerson(pid);
   document.getElementById("pdNote").addEventListener("change",async e=>{ p.note=e.target.value; await dbPut("people",p); });
   document.getElementById("pdFollow").onclick=async()=>{ p.followUp=!p.followUp; await dbPut("people",p); renderPerson(pid); renderAll(); };
   document.getElementById("pdRename").onclick=async()=>{ const nn=prompt("New name",p.name); if(nn&&nn.trim()){ p.name=nn.trim(); p.nameLower=norm(nn); await dbPut("people",p); renderPerson(pid); renderAll(); } };
@@ -442,7 +445,7 @@ function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate
   el.className="pgrid";
   const sorted=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)||b.createdAt-a.createdAt);
   el.innerHTML=sorted.map((p,i)=>{ const ct=meetCount(p.id);
-    return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${p.followUp?'<span class="dot"></span>':""}</div>
+    return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${p.invited?'<span class="dot inv"></span>':(p.followUp?'<span class="dot"></span>':"")}</div>
       <div class="nm">${esc(p.name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`; }).join("");
   el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
 }
@@ -527,6 +530,25 @@ async function saveVoiceMoment(){
   await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:null, caption:note, personIds:ids });
   closeVoiceSheet(); await loadAll(); renderAll();
   toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); switchView("today"); }
+
+/* ========================= invite / claim ========================= */
+const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
+function getMyName(){ let n=localStorage.getItem("wim_my_name")||""; if(!n){ n=(prompt("Your name (shown on the invites you send)")||"").trim(); if(n) localStorage.setItem("wim_my_name",n); } return n||"A friend"; }
+async function invitePerson(pid){ const p=personById(pid); if(!p) return;
+  const me=getMyName(), first=p.name.split(" ")[0];
+  const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name);
+  const msg=first+", I met you today — claim your HiRey profile: "+url;
+  const m=state.meetings.find(x=>x.personIds.includes(pid)&&x.photo);
+  let sent=false;
+  try{
+    if(m&&m.photo&&navigator.canShare){ const file=new File([m.photo],"who-i-met.jpg",{type:m.photo.type||"image/jpeg"});
+      if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],text:msg,title:"HiRey"}); sent=true; } }
+    if(!sent&&navigator.share){ await navigator.share({text:msg,url}); sent=true; }
+  }catch(e){ if(e&&e.name==="AbortError") return; }
+  if(!sent){ try{ await navigator.clipboard.writeText(msg); toast("Invite copied — paste it to "+first); }catch(_){ prompt("Copy this invite:",msg); } }
+  if(!p.invited){ p.invited=true; await dbPut("people",p); renderPerson(pid); renderAll(); }
+  if(sent) toast("Invite ready for "+first);
+}
 
 /* ========================= dev seed (console only) ========================= */
 function monoBlob(seed){ return new Promise(res=>{ const c=document.createElement("canvas"); c.width=640; c.height=800;
