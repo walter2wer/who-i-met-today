@@ -99,9 +99,10 @@
   .card-share{font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);border:0;border-radius:999px;padding:8px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--shadow-sm)}
   .card-share svg{width:15px;height:15px}
   .card-share:active{transform:translateY(1px)}
-  .mic-sm{width:48px;height:48px;flex:0 0 auto;border-radius:14px;border:.5px solid var(--line-2);background:var(--card);color:var(--ink);display:grid;place-items:center;cursor:pointer}
-  .mic-sm svg{width:20px;height:20px}
-  .mic-sm.live{background:var(--green);color:#fff;border-color:transparent;animation:micpulse 1.5s infinite}
+  .btn-mic{width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:9px;background:rgba(52,199,89,.12);color:#1d7c3e;border:0;border-radius:14px;padding:13px 16px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .btn-mic svg{width:19px;height:19px;flex:0 0 auto}
+  .btn-mic:active{transform:translateY(1px)}
+  .btn-mic.live{background:var(--green);color:#fff;animation:micpulse 1.5s infinite}
   /* stats */
   .stats{display:flex;background:var(--card);border-radius:16px;box-shadow:var(--shadow-sm);margin:18px 0 26px;overflow:hidden}
   .stat{flex:1;padding:15px 6px 13px;text-align:center;border-left:.5px solid var(--line)}
@@ -336,8 +337,8 @@ function renderCaptureSheet(){
     <div class="grip"></div>
     <h2>Who did you meet?</h2>
     <div class="preview-wrap"><img src="${pending.url}" alt=""></div>
-    <div style="display:flex;gap:8px;align-items:center"><input type="text" id="nameInput" placeholder="Type or say a name" autocomplete="off" autocapitalize="words" style="flex:1">${SR?'<button class="mic-sm" id="nameMic" aria-label="Speak the name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>':''}</div>
-    ${SR?`<p style="font-size:12px;color:var(--ink-faint);margin:8px 2px 0;line-height:1.45">Tap the mic and just talk — say their name and anything about them.</p>`:""}
+    <input type="text" id="nameInput" placeholder="Type a name, then Enter" autocomplete="off" autocapitalize="words">
+    ${SR?`<button class="btn-mic" id="nameMic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micLbl">Or just talk — their name + anything about them</span></button>`:""}
     <div class="added" id="added">${pending.names.map(n=>{ const c=pcolor(n);
       return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("")}</div>
     ${recent.length?`<div class="suggest">${recent.map(n=>`<button class="s" data-s="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}
@@ -359,10 +360,12 @@ function addName(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>
   renderCaptureSheet(); document.getElementById("nameInput")?.focus(); }
 function dictateName(){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ return; }
   r2.lang=navigator.language||"en-US"; r2.interimResults=true;
-  const inp=document.getElementById("nameInput"), btn=document.getElementById("nameMic"); if(btn) btn.classList.add("live");
+  const inp=document.getElementById("nameInput"), btn=document.getElementById("nameMic"), lbl=document.getElementById("micLbl");
+  const off=()=>{ if(btn) btn.classList.remove("live"); if(lbl) lbl.textContent="Or just talk — their name + anything about them"; };
+  if(btn) btn.classList.add("live"); if(lbl) lbl.textContent="Listening… just talk";
   r2.onresult=e=>{ let t=""; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; if(inp) inp.value=t; };
-  r2.onerror=()=>{ if(btn) btn.classList.remove("live"); };
-  r2.onend=()=>{ if(btn) btn.classList.remove("live"); const v=inp&&inp.value.trim(); if(!v) return; if(inp) inp.value="";
+  r2.onerror=off;
+  r2.onend=()=>{ off(); const v=inp&&inp.value.trim(); if(!v) return; if(inp) inp.value="";
     const names=detectNames(v);
     if(names.length){ addName(names[0]);
       const rest=v.replace(new RegExp(names[0].replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i"),"").replace(/^[\s,.;:—-]+|[\s,.;:—-]+$/g,"").trim();
