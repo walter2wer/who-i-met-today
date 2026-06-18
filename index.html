@@ -335,26 +335,29 @@ function renderCaptureSheet(){
     <div class="field-label" style="margin-top:20px">Note &mdash; optional</div>
     <input type="text" id="capNote" placeholder="coffee @ Ritual, talked about the seed round" autocomplete="off">
     <div class="sheet-actions">
-      <button class="btn btn-ghost" id="capCancel">Cancel</button>
-      <button class="btn btn-primary" id="capSave">Save moment</button>
+      <button class="btn btn-ghost" id="capSaveOnly">Save only</button>
+      <button class="btn btn-primary" id="capSave">Save &amp; share &rarr;</button>
     </div>`;
   const input=document.getElementById("nameInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addName(input.value); input.value=""; }});
   document.querySelectorAll("#added .tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderCaptureSheet(); });
   document.querySelectorAll("#sheet .s").forEach(b=>b.onclick=()=>addName(b.dataset.s));
-  document.getElementById("capCancel").onclick=closeCaptureSheet;
-  document.getElementById("capSave").onclick=saveMoment;
+  document.getElementById("capSaveOnly").onclick=()=>saveMoment(false);
+  document.getElementById("capSave").onclick=()=>saveMoment(true);
 }
 function addName(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
   renderCaptureSheet(); document.getElementById("nameInput")?.focus(); }
 function closeCaptureSheet(){ if(typeof stopRec==="function") stopRec(); hideSheet("sheet","scrim"); if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]}; }
-async function saveMoment(){
+async function saveMoment(shareAfter){
   const note=document.getElementById("capNote").value.trim();
   const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
+  const blob=pending.blob;
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
-  await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:pending.blob, caption:note, personIds:ids });
-  closeCaptureSheet(); await loadAll(); renderAll();
-  toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); switchView("today");
+  await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids });
+  if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]};
+  await loadAll(); renderAll(); switchView("today");
+  if(shareAfter && ids.length){ await presentCard(ids[0], {sheet:"sheet",scrim:"scrim",backLabel:"Done",onBack:()=>hideSheet("sheet","scrim")}); }
+  else { hideSheet("sheet","scrim"); toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); }
 }
 
 /* ========================= person detail ========================= */
@@ -488,15 +491,15 @@ function renderVoiceSheet(){
     <div class="added" id="added"></div>
     <div class="suggest" id="voiceSuggest"></div>
     <div class="sheet-actions">
-      <button class="btn btn-ghost" id="capCancel">Cancel</button>
-      <button class="btn btn-primary" id="capSave">Save moment</button>
+      <button class="btn btn-ghost" id="capSaveOnly">Save only</button>
+      <button class="btn btn-primary" id="capSave">Save &amp; share &rarr;</button>
     </div>`;
   document.getElementById("voiceText").addEventListener("input",renderVChips);
   const input=document.getElementById("nameInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addNameV(input.value); input.value=""; }});
   if(SR) document.getElementById("micBtn").onclick=toggleRec;
-  document.getElementById("capCancel").onclick=closeVoiceSheet;
-  document.getElementById("capSave").onclick=saveVoiceMoment;
+  document.getElementById("capSaveOnly").onclick=()=>saveVoiceMoment(false);
+  document.getElementById("capSave").onclick=()=>saveVoiceMoment(true);
   renderVChips();
 }
 function renderVChips(){ const added=document.getElementById("added"); if(!added) return;
@@ -522,14 +525,16 @@ function stopRec(){ try{ if(rec) rec.stop(); }catch(e){} listening=false; micUI(
 function micUI(){ const b=document.getElementById("micBtn"), h=document.getElementById("micHint");
   if(b) b.classList.toggle("live",listening); if(h) h.innerHTML=listening?"Listening… tap to stop.":(SR?"Tap the mic and just say it &mdash; or type below.":"Type who you met below."); }
 function closeVoiceSheet(){ stopRec(); hideSheet("sheet","scrim"); pending={blob:null,url:"",names:[]}; }
-async function saveVoiceMoment(){
+async function saveVoiceMoment(shareAfter){
   const note=document.getElementById("voiceText").value.trim();
   const stray=document.getElementById("nameInput").value.trim(); if(stray) addNameV(stray);
   if(!pending.names.length&&!note){ toast("Say or type something first"); return; }
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
   await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:null, caption:note, personIds:ids });
-  closeVoiceSheet(); await loadAll(); renderAll();
-  toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); switchView("today"); }
+  stopRec(); pending={blob:null,url:"",names:[]};
+  await loadAll(); renderAll(); switchView("today");
+  if(shareAfter && ids.length){ await presentCard(ids[0], {sheet:"sheet",scrim:"scrim",backLabel:"Done",onBack:()=>hideSheet("sheet","scrim")}); }
+  else { hideSheet("sheet","scrim"); toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); } }
 
 /* ========================= invite / claim ========================= */
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
@@ -588,19 +593,20 @@ async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getM
   if(!p.invited){ p.invited=true; await dbPut("people",p); renderAll(); }
   return sent;
 }
-async function sendCard(pid){ const p=personById(pid); if(!p) return;
+async function presentCard(pid, opt){ const p=personById(pid); if(!p) return;
   const m=state.meetings.find(x=>x.personIds.includes(pid)&&x.photo);
   const card=await makeCardBlob(getMyName(), p.name, m&&m.photo, (m&&m.createdAt)||Date.now(), pcolor(p.name).a);
-  const cardURL=URL.createObjectURL(card);
-  document.getElementById("sheet2").innerHTML=`
+  const cardURL=URL.createObjectURL(card), first=p.name.split(" ")[0];
+  document.getElementById(opt.sheet).innerHTML=`
     <div class="grip"></div>
     <span class="eyebrow sec" style="margin:6px 0 12px">Your we-met card</span>
-    <div class="preview-wrap" style="background:transparent;box-shadow:0 8px 22px rgba(20,18,16,.12);border-radius:14px;overflow:hidden"><img src="${cardURL}" style="object-fit:contain;max-height:60vh"></div>
-    <p style="font-size:14px;color:var(--ink-soft);margin:12px 0 0">Send it to ${esc(p.name.split(" ")[0])} — you both keep a copy.</p>
-    <div class="sheet-actions"><button class="btn btn-ghost" id="cardBack">Back</button><button class="btn btn-primary" id="cardShare">Share card</button></div>`;
-  document.getElementById("cardBack").onclick=()=>renderPerson(pid);
-  document.getElementById("cardShare").onclick=async()=>{ const ok=await shareCard(card,p); renderPerson(pid); if(ok) toast("Card sent to "+p.name.split(" ")[0]); };
+    <div class="preview-wrap" style="background:transparent;box-shadow:0 8px 22px rgba(20,18,16,.12);border-radius:14px;overflow:hidden"><img src="${cardURL}" style="object-fit:contain;max-height:56vh"></div>
+    <p style="font-size:14px;color:var(--ink-soft);margin:12px 0 0">Send it to ${esc(first)} — you both keep a copy.</p>
+    <div class="sheet-actions"><button class="btn btn-ghost" id="cardBack">${opt.backLabel||"Back"}</button><button class="btn btn-primary" id="cardShare">Share card</button></div>`;
+  document.getElementById("cardBack").onclick=()=>opt.onBack();
+  document.getElementById("cardShare").onclick=async()=>{ const ok=await shareCard(card,p); opt.onBack(); if(ok) toast("Card sent to "+first); };
 }
+function sendCard(pid){ return presentCard(pid,{sheet:"sheet2",scrim:"scrim2",backLabel:"Back",onBack:()=>renderPerson(pid)}); }
 
 /* ========================= dev seed (console only) ========================= */
 function monoBlob(seed){ return new Promise(res=>{ const c=document.createElement("canvas"); c.width=640; c.height=800;
