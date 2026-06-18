@@ -366,7 +366,7 @@ function renderPerson(pid){ const p=personById(pid); if(!p) return;
     <div class="pd-head">${avaHTML(p)}
       <div><div class="nm">${esc(p.name)}</div>
       <div class="ct">${ms.length} moment${ms.length===1?"":"s"} · last ${last}${p.invited?" · invited":""}</div></div></div>
-    <button class="btn btn-primary" id="pdInvite" style="width:100%;margin:16px 0 4px">${p.invited?"Re-send invite":"Invite to HiRey"}</button>
+    <button class="btn btn-primary" id="pdInvite" style="width:100%;margin:16px 0 4px">${p.invited?"Re-send our card":"Send our we-met card"}</button>
     <div class="pd-actions">
       <button class="mini ${p.followUp?"on":""}" id="pdFollow">${p.followUp?"Following up":"Follow up"}</button>
       <button class="mini" id="pdRename">Rename</button>
@@ -377,7 +377,7 @@ function renderPerson(pid){ const p=personById(pid); if(!p) return;
     <div class="thumbs">${ms.map(m=>m.photo?`<img src="${photoURL(m)}">`:"").join("")||'<div class="ct">No photos yet.</div>'}</div>
     <div class="sheet-actions"><button class="btn btn-ghost" id="pdClose">Close</button></div>`;
   document.getElementById("pdClose").onclick=()=>hideSheet("sheet2","scrim2");
-  document.getElementById("pdInvite").onclick=()=>invitePerson(pid);
+  document.getElementById("pdInvite").onclick=()=>sendCard(pid);
   document.getElementById("pdNote").addEventListener("change",async e=>{ p.note=e.target.value; await dbPut("people",p); });
   document.getElementById("pdFollow").onclick=async()=>{ p.followUp=!p.followUp; await dbPut("people",p); renderPerson(pid); renderAll(); };
   document.getElementById("pdRename").onclick=async()=>{ const nn=prompt("New name",p.name); if(nn&&nn.trim()){ p.name=nn.trim(); p.nameLower=norm(nn); await dbPut("people",p); renderPerson(pid); renderAll(); } };
@@ -548,6 +548,58 @@ async function invitePerson(pid){ const p=personById(pid); if(!p) return;
   if(!sent){ try{ await navigator.clipboard.writeText(msg); toast("Invite copied — paste it to "+first); }catch(_){ prompt("Copy this invite:",msg); } }
   if(!p.invited){ p.invited=true; await dbPut("people",p); renderPerson(pid); renderAll(); }
   if(sent) toast("Invite ready for "+first);
+}
+
+function loadImg(blob){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(blob); }); }
+async function makeCardBlob(meName, theirName, photoBlob, dateTs, accent){
+  const W=1080, PH=980, BH=360, H=PH+BH, pad=64;
+  const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d");
+  x.fillStyle="#fbfaf7"; x.fillRect(0,0,W,H);
+  if(photoBlob){ const img=await loadImg(photoBlob); const s=Math.max(W/img.width,PH/img.height), dw=img.width*s, dh=img.height*s;
+    x.drawImage(img,(W-dw)/2,(PH-dh)/2,dw,dh); }
+  else { x.fillStyle="#efe9dd"; x.fillRect(0,0,W,PH); x.fillStyle=accent||"#8a5c00";
+    x.font="600 240px 'Iowan Old Style',Palatino,Georgia,serif"; x.textAlign="center"; x.textBaseline="middle";
+    x.fillText(initials(theirName),W/2,PH/2); x.textAlign="left"; x.textBaseline="alphabetic"; }
+  x.fillStyle="#fbfaf7"; x.fillRect(0,PH,W,BH);
+  x.fillStyle=accent||"#34c759"; x.beginPath(); x.arc(pad+7,PH+72,9,0,Math.PI*2); x.fill();
+  try{x.letterSpacing="5px";}catch(_){}
+  x.fillStyle="rgba(22,20,18,.5)"; x.font="600 28px -apple-system,Inter,Helvetica,Arial,sans-serif"; x.fillText("WE MET", pad+30, PH+82);
+  try{x.letterSpacing="0px";}catch(_){}
+  const names=meName+"   ×   "+theirName; x.fillStyle="#161412"; let fs=74; x.font="600 "+fs+"px 'Iowan Old Style',Palatino,Georgia,serif";
+  while(x.measureText(names).width>W-2*pad&&fs>32){ fs-=2; x.font="600 "+fs+"px 'Iowan Old Style',Palatino,Georgia,serif"; }
+  x.fillText(names, pad, PH+178);
+  x.fillStyle="rgba(22,20,18,.5)"; x.font="400 30px -apple-system,Inter,Helvetica,Arial,sans-serif";
+  x.fillText(new Date(dateTs||Date.now()).toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}), pad, PH+228);
+  x.textAlign="right"; x.fillStyle="#161412"; x.font="italic 600 32px 'Iowan Old Style',Palatino,Georgia,serif"; x.fillText("HiRey", W-pad, PH+292);
+  x.fillStyle="rgba(22,20,18,.4)"; x.font="400 22px -apple-system,sans-serif"; x.fillText("hirey.ai", W-pad, PH+326);
+  x.textAlign="left";
+  return new Promise(res=>c.toBlob(res,"image/jpeg",.92));
+}
+async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getMyName();
+  const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name);
+  const text="Great meeting you, "+first+"! Here's our card. Claim your HiRey page to keep it: "+url;
+  let sent=false;
+  try{ const file=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:"HiRey"}); sent=true; }
+    else if(navigator.share){ await navigator.share({text,url}); sent=true; }
+  }catch(e){ if(e&&e.name==="AbortError") return false; }
+  if(!sent){ try{ await navigator.clipboard.writeText(text); toast("Link copied — paste it to "+first); }catch(_){}
+    const a=document.createElement("a"); a.href=URL.createObjectURL(cardBlob); a.download="we-met-"+first+".jpg"; document.body.appendChild(a); a.click(); a.remove(); }
+  if(!p.invited){ p.invited=true; await dbPut("people",p); renderAll(); }
+  return sent;
+}
+async function sendCard(pid){ const p=personById(pid); if(!p) return;
+  const m=state.meetings.find(x=>x.personIds.includes(pid)&&x.photo);
+  const card=await makeCardBlob(getMyName(), p.name, m&&m.photo, (m&&m.createdAt)||Date.now(), pcolor(p.name).a);
+  const cardURL=URL.createObjectURL(card);
+  document.getElementById("sheet2").innerHTML=`
+    <div class="grip"></div>
+    <span class="eyebrow sec" style="margin:6px 0 12px">Your we-met card</span>
+    <div class="preview-wrap" style="background:transparent;box-shadow:0 8px 22px rgba(20,18,16,.12);border-radius:14px;overflow:hidden"><img src="${cardURL}" style="object-fit:contain;max-height:60vh"></div>
+    <p style="font-size:14px;color:var(--ink-soft);margin:12px 0 0">Send it to ${esc(p.name.split(" ")[0])} — you both keep a copy.</p>
+    <div class="sheet-actions"><button class="btn btn-ghost" id="cardBack">Back</button><button class="btn btn-primary" id="cardShare">Share card</button></div>`;
+  document.getElementById("cardBack").onclick=()=>renderPerson(pid);
+  document.getElementById("cardShare").onclick=async()=>{ const ok=await shareCard(card,p); renderPerson(pid); if(ok) toast("Card sent to "+p.name.split(" ")[0]); };
 }
 
 /* ========================= dev seed (console only) ========================= */
