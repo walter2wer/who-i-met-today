@@ -337,6 +337,7 @@ function renderCaptureSheet(){
     <h2>Who did you meet?</h2>
     <div class="preview-wrap"><img src="${pending.url}" alt=""></div>
     <div style="display:flex;gap:8px;align-items:center"><input type="text" id="nameInput" placeholder="Type or say a name" autocomplete="off" autocapitalize="words" style="flex:1">${SR?'<button class="mic-sm" id="nameMic" aria-label="Speak the name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>':''}</div>
+    ${SR?`<p style="font-size:12px;color:var(--ink-faint);margin:8px 2px 0;line-height:1.45">Tap the mic and just talk — say their name and anything about them.</p>`:""}
     <div class="added" id="added">${pending.names.map(n=>{ const c=pcolor(n);
       return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("")}</div>
     ${recent.length?`<div class="suggest">${recent.map(n=>`<button class="s" data-s="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}
@@ -361,7 +362,12 @@ function dictateName(){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ ret
   const inp=document.getElementById("nameInput"), btn=document.getElementById("nameMic"); if(btn) btn.classList.add("live");
   r2.onresult=e=>{ let t=""; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; if(inp) inp.value=t; };
   r2.onerror=()=>{ if(btn) btn.classList.remove("live"); };
-  r2.onend=()=>{ if(btn) btn.classList.remove("live"); const v=inp&&inp.value.trim(); if(v) addName(v); };
+  r2.onend=()=>{ if(btn) btn.classList.remove("live"); const v=inp&&inp.value.trim(); if(!v) return; if(inp) inp.value="";
+    const names=detectNames(v);
+    if(names.length){ addName(names[0]);
+      const rest=v.replace(new RegExp(names[0].replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i"),"").replace(/^[\s,.;:—-]+|[\s,.;:—-]+$/g,"").trim();
+      const note=document.getElementById("capNote"); if(note&&rest.length>2&&!note.value.trim()) note.value=rest;
+    } else { addName(v); } };
   try{ r2.start(); }catch(_){ if(btn) btn.classList.remove("live"); } }
 function closeCaptureSheet(){ if(typeof stopRec==="function") stopRec(); hideSheet("sheet","scrim"); if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]}; }
 async function saveMoment(shareAfter){
