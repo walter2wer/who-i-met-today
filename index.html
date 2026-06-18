@@ -184,6 +184,37 @@
     background:var(--ink);color:#fff;font-size:14px;font-weight:500;padding:12px 20px;border-radius:999px;
     z-index:80;opacity:0;transition:all .25s;max-width:88%;text-align:center;box-shadow:var(--shadow)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  /* ---------- account / sign-in ---------- */
+  .acct-btn{display:flex;align-items:center;gap:7px;background:none;border:0;cursor:pointer;padding:0;font:inherit;color:inherit;text-align:left}
+  .acct-ava{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:13px;flex:0 0 auto;background:rgba(36,103,232,.12);color:var(--blue);box-shadow:0 0 0 1.5px var(--line)}
+  .acct-ava.live{box-shadow:0 0 0 2px var(--green)}
+  .acct-ava img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+  .seg{display:flex;gap:6px;background:rgba(22,20,18,.05);padding:4px;border-radius:14px;margin:2px 0 18px}
+  .seg button{flex:1;border:0;background:none;cursor:pointer;font:inherit;font-size:13.5px;font-weight:600;color:var(--ink-soft);padding:9px 4px;border-radius:11px;transition:background .15s,color .15s}
+  .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm)}
+  .auth-msg{font-size:13.5px;color:var(--ink-soft);line-height:1.5;margin:0 0 16px}
+  .auth-msg b{color:var(--ink);font-weight:600}
+  .btn-google{width:100%;background:var(--card);color:var(--ink);border:.5px solid var(--line-2);box-shadow:var(--shadow-sm);gap:10px}
+  .btn-google svg{width:18px;height:18px}
+  .acct-card{display:flex;align-items:center;gap:14px;padding:4px 0 6px}
+  .acct-card .big{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:21px;flex:0 0 auto;background:rgba(36,103,232,.12);color:var(--blue);box-shadow:0 0 0 2px var(--green)}
+  .acct-card .big img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+  .acct-card .nm{font-family:var(--serif);font-size:21px;font-weight:600;line-height:1.1}
+  .acct-card .ct{font-size:12.5px;color:var(--ink-soft);margin-top:4px;line-height:1.35}
+  .acct-card .ct .v{color:var(--green);font-weight:600}
+  .row-link{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:var(--card);border:.5px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);padding:14px 16px;cursor:pointer;font:inherit;color:var(--ink);font-size:14.5px;font-weight:600;margin-top:10px;text-align:left}
+  .row-link .sub{display:block;font-size:12px;color:var(--ink-faint);font-weight:500;margin-top:3px}
+  .row-link>span:first-child{display:block}
+  .row-link svg{width:16px;height:16px;color:var(--ink-faint);flex:0 0 auto}
+  .hi-badge{font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;padding:3px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;vertical-align:middle}
+  .hi-badge.on{background:rgba(52,199,89,.14);color:#1d7c3e}
+  .hi-badge.pending{background:rgba(209,138,0,.14);color:#8a5c00}
+  .hi-badge svg{width:10px;height:10px}
+  .pd-hi{margin:18px 0 4px;padding:15px 16px;background:rgba(36,103,232,.05);border:.5px solid rgba(36,103,232,.14);border-radius:16px}
+  .pd-hi h4{margin:0 0 4px;font-family:var(--serif);font-size:16px;font-weight:600}
+  .pd-hi p{margin:0 0 12px;font-size:12.5px;color:var(--ink-soft);line-height:1.45}
+  .pd-hi input{margin-bottom:10px}
+  .dot.hi{background:var(--blue);animation:none}
 </style>
 </head>
 <body>
@@ -194,6 +225,7 @@
       <div class="sub" id="hdrSub">by HiRey · live on this device</div>
     </div>
     <div class="hdr-right">
+      <button class="acct-btn" id="navAcct" aria-label="Account"><span class="acct-ava" id="acctAva"></span></button>
       <div class="hdr-count"><b id="hdrCount">0</b>people</div>
       <button class="add-btn" id="navCap" aria-label="Take photo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -285,6 +317,51 @@ function store(s,m){ return _db.transaction(s,m).objectStore(s); }
 function dbGetAll(s){ return new Promise((res,rej)=>{ const r=store(s,"readonly").getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 function dbPut(s,v){ return new Promise((res,rej)=>{ const r=store(s,"readwrite").put(v); r.onsuccess=()=>res(v); r.onerror=()=>rej(r.error); }); }
 function dbDel(s,k){ return new Promise((res,rej)=>{ const r=store(s,"readwrite").delete(k); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+
+/* ========================= Hi platform (optional cloud sync) ========================= */
+/* On-device first: nothing leaves this device until you sign in. Signing in only
+   unlocks (1) your real HiRey profile on the we-met cards, and (2) sending a
+   real, consented claim to a person you met (they get to accept or decline). */
+const HI={
+  base:"https://hi.hirey.ai",
+  KEY:"wimt_hi",
+  profile:null,            // cached owner_profile once signed in
+  consent:new Map(),       // norm(name) -> consent_state ('approved'|'declined'|'pending')
+  session(){ try{ return JSON.parse(localStorage.getItem(this.KEY)||"null"); }catch(_){ return null; } },
+  save(s){ localStorage.setItem(this.KEY,JSON.stringify(s)); },
+  clear(){ localStorage.removeItem(this.KEY); this.profile=null; this.consent.clear(); },
+  authed(){ const s=this.session(); return !!(s&&s.access_token&&(!s.expires_at||s.expires_at>Date.now())); },
+  myName(){ return (this.profile&&this.profile.display_name)||(this.session()&&this.session().display_name)||""; },
+  async post(path,body,withAuth){
+    const headers={"content-type":"application/json"};
+    if(withAuth){ const s=this.session(); if(s&&s.access_token) headers.authorization="Bearer "+s.access_token; }
+    const r=await fetch(this.base+path,{method:"POST",headers,body:JSON.stringify(body||{})});
+    let j={}; try{ j=await r.json(); }catch(_){}
+    if(!r.ok){ const e=new Error(j.error||j.error_code||("http_"+r.status)); e.status=r.status; e.body=j; throw e; }
+    return j;
+  },
+  // capability call -> returns the inner `result` object, throws on error envelope
+  async call(cap,body){
+    const j=await this.post("/v1/capabilities/"+cap+"/call",body,true);
+    if(j&&j.error){ const e=new Error(j.error); e.body=j; throw e; }
+    return (j&&j.result)||j;
+  },
+  onToken(tok){
+    const ttl=(tok.expires_in||86400)*1000;
+    this.save({ access_token:tok.access_token, expires_at:Date.now()+ttl-60000,
+      agent_id:tok.agent_id, workspace_id:tok.workspace_id, display_name:(this.session()&&this.session().display_name)||"" });
+  },
+};
+async function hiSyncProfile(){ if(!HI.authed()) return null;
+  try{ const r=await HI.call("hi.owners",{action:"get"}); const p=r.owner_profile||r;
+    HI.profile=p; const s=HI.session()||{}; s.display_name=p.display_name||s.display_name; s.owner_public_url=r.owner_public_url; HI.save(s);
+    return p;
+  }catch(e){ if(e.status===401||e.body&&e.body.error==="token_expired"){ HI.clear(); } return null; } }
+async function hiRefreshConsent(){ if(!HI.authed()) return;
+  try{ const r=await HI.call("hi.connectors",{action:"list_met"}); HI.consent.clear();
+    for(const m of (r.met||[])){ if(m.met_display_name) HI.consent.set(norm(m.met_display_name),{state:m.consent_state,intro_id:m.intro_id,pairing:m.resulting_pairing_id}); }
+  }catch(_){} }
+function hiConsentFor(p){ if(!p) return null; return HI.consent.get(p.nameLower||norm(p.name))||null; }
 
 /* ========================= state / helpers ========================= */
 const state={ people:[], meetings:[], urls:new Map() };
@@ -389,12 +466,26 @@ async function saveMoment(shareAfter){
 function openPerson(pid){ renderPerson(pid); showSheet("sheet2","scrim2"); }
 function renderPerson(pid){ const p=personById(pid); if(!p) return;
   const ms=state.meetings.filter(m=>m.personIds.includes(pid)); const last=ms[0]?relDay(ms[0].createdAt):"—";
+  const c=hiConsentFor(p), onHi=c&&c.state==="approved";
+  const first=esc(p.name.split(" ")[0]);
+  const status=onHi?` · <span style="color:var(--blue);font-weight:600">on HiRey</span>`:(p.hiInvited?" · invited to HiRey":(p.invited?" · invited":""));
+  const hiBlock=HI.authed()?`
+    <div class="pd-hi">
+      <h4>Connect on HiRey</h4>
+      ${onHi?`<p><span class="hi-badge on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>on HiRey</span> ${first} is on HiRey — you're connected. They can decline anytime.</p>`
+        :(p.hiInvited?`<p><span class="hi-badge pending">invited</span> Waiting for ${first} to claim their page. Re-send below if it didn't land.</p>`
+          :`<p>Send ${first} a real, consented invite — they choose to accept or decline. Needs a way to reach them.</p>`)}
+      ${onHi?"":`
+        <input type="text" id="hiContact" placeholder="their email or phone" value="${esc(p.contact||"")}" inputmode="email" autocomplete="off">
+        <button class="btn btn-primary" id="hiSend" style="width:100%">${p.hiInvited?"Re-send HiRey invite":"Send HiRey invite"}</button>`}
+    </div>`:"";
   document.getElementById("sheet2").innerHTML=`
     <div class="grip"></div>
     <div class="pd-head">${avaHTML(p)}
       <div><div class="nm">${esc(p.name)}</div>
-      <div class="ct">${ms.length} moment${ms.length===1?"":"s"} · last ${last}${p.invited?" · invited":""}</div></div></div>
+      <div class="ct">${ms.length} moment${ms.length===1?"":"s"} · last ${last}${status}</div></div></div>
     <button class="btn btn-primary" id="pdInvite" style="width:100%;margin:16px 0 4px">${p.invited?"Re-send our card":"Send our we-met card"}</button>
+    ${hiBlock}
     <div class="pd-actions">
       <button class="mini ${p.followUp?"on":""}" id="pdFollow">${p.followUp?"Following up":"Follow up"}</button>
       <button class="mini" id="pdRename">Rename</button>
@@ -406,6 +497,8 @@ function renderPerson(pid){ const p=personById(pid); if(!p) return;
     <div class="sheet-actions"><button class="btn btn-ghost" id="pdClose">Close</button></div>`;
   document.getElementById("pdClose").onclick=()=>hideSheet("sheet2","scrim2");
   document.getElementById("pdInvite").onclick=()=>sendCard(pid);
+  const hiSendBtn=document.getElementById("hiSend"); if(hiSendBtn) hiSendBtn.onclick=()=>hiInvite(pid);
+  const hiC=document.getElementById("hiContact"); if(hiC) hiC.addEventListener("change",async e=>{ p.contact=e.target.value.trim(); await dbPut("people",p); });
   document.getElementById("pdNote").addEventListener("change",async e=>{ p.note=e.target.value; await dbPut("people",p); });
   document.getElementById("pdFollow").onclick=async()=>{ p.followUp=!p.followUp; await dbPut("people",p); renderPerson(pid); renderAll(); };
   document.getElementById("pdRename").onclick=async()=>{ const nn=prompt("New name",p.name); if(nn&&nn.trim()){ p.name=nn.trim(); p.nameLower=norm(nn); await dbPut("people",p); renderPerson(pid); renderAll(); } };
@@ -476,8 +569,9 @@ function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate
   if(!state.people.length){ el.className=""; el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/></svg></div><h3>No one here yet</h3><p>Your circle grows each time you capture a face.</p></div>`; return; }
   el.className="pgrid";
   const sorted=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)||b.createdAt-a.createdAt);
-  el.innerHTML=sorted.map((p,i)=>{ const ct=meetCount(p.id);
-    return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${p.invited?'<span class="dot inv"></span>':(p.followUp?'<span class="dot"></span>':"")}</div>
+  el.innerHTML=sorted.map((p,i)=>{ const ct=meetCount(p.id); const c=hiConsentFor(p);
+    const dot=(c&&c.state==="approved")?'<span class="dot hi"></span>':(p.invited||p.hiInvited)?'<span class="dot inv"></span>':(p.followUp?'<span class="dot"></span>':"");
+    return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${dot}</div>
       <div class="nm">${esc(p.name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`; }).join("");
   el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
 }
@@ -488,7 +582,8 @@ function switchView(v){ document.querySelectorAll(".view").forEach(s=>s.classLis
   document.querySelectorAll(".tab[data-view]").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   window.scrollTo({top:0,behavior:"smooth"}); }
 document.querySelectorAll(".tab[data-view]").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
-const _brand=document.querySelector("header .brand"); if(_brand){ _brand.style.cursor="pointer"; _brand.title="Edit your name"; _brand.onclick=editMyName; }
+const _brand=document.querySelector("header .brand"); if(_brand){ _brand.style.cursor="pointer"; _brand.title="Your account"; _brand.onclick=openAccount; }
+document.getElementById("navAcct").onclick=openAccount;
 const fileCam=document.getElementById("fileCam"), fileLib=document.getElementById("fileLib");
 document.getElementById("btnCapture").onclick=()=>fileCam.click();
 document.getElementById("navCap").onclick=()=>fileCam.click();
@@ -568,8 +663,16 @@ async function saveVoiceMoment(shareAfter){
 
 /* ========================= invite / claim ========================= */
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
-function getMyName(){ return (localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
-function updateMe(){ const n=localStorage.getItem("wim_my_name")||""; const el=document.getElementById("hdrSub"); if(el) el.textContent=(n?n+" · ":"")+"by HiRey"; }
+function getMyName(){ return (HI.myName()||localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
+function updateMe(){
+  const n=(HI.myName()||localStorage.getItem("wim_my_name")||"").trim();
+  const el=document.getElementById("hdrSub");
+  if(el) el.textContent=HI.authed()?(n?n+" · ":"")+"signed in to HiRey":(n?n+" · ":"")+"on this device · sign in to sync";
+  const ab=document.getElementById("acctAva");
+  if(ab){ ab.classList.toggle("live",HI.authed());
+    const av=HI.profile&&HI.profile.avatar_url;
+    ab.innerHTML=av?`<img src="${esc(av)}" alt="" onerror="this.parentNode.textContent='${esc(initials(n||"?"))}'">`:(n?esc(initials(n)):`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>`); }
+}
 function nameEditor(){ const cur=localStorage.getItem("wim_my_name")||"";
   document.getElementById("sheet").innerHTML=`
     <div class="grip"></div>
@@ -584,8 +687,176 @@ function nameEditor(){ const cur=localStorage.getItem("wim_my_name")||"";
   document.getElementById("onbName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); save(); }});
   setTimeout(()=>{ const el=document.getElementById("onbName"); if(el){ el.focus(); el.select(); } },320);
 }
-function ensureMyName(){ if(localStorage.getItem("wim_my_name")) return; nameEditor(); }
+function ensureMyName(){ if(localStorage.getItem("wim_my_name")||HI.authed()) return; nameEditor(); }
 function editMyName(){ nameEditor(); }
+
+/* ========================= account / Hi sign-in ========================= */
+const CHEV=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
+let _auth={ method:"email", stage:"enter", flowId:null, value:"", busy:false };
+function openAccount(){
+  if(!HI.authed()) _auth={method:"email",stage:"enter",flowId:null,value:"",busy:false};
+  else if(!HI.profile) hiSyncProfile().then(()=>{ if(document.getElementById("sheet").classList.contains("show")&&HI.authed()) renderAccount(); updateMe(); });
+  renderAccount(); showSheet("sheet","scrim");
+}
+function renderAccount(){
+  const s=document.getElementById("sheet");
+  if(HI.authed()){
+    const p=HI.profile||{}, name=HI.myName()||"You", av=p.avatar_url, url=(HI.session()&&HI.session().owner_public_url)||p.owner_public_url;
+    const onHi=HI.consent.size;
+    s.innerHTML=`
+      <div class="grip"></div>
+      <h2>Your HiRey</h2>
+      <div class="acct-card">
+        <div class="big">${av?`<img src="${esc(av)}" alt="" onerror="this.parentNode.textContent='${esc(initials(name))}'">`:esc(initials(name))}</div>
+        <div><div class="nm">${esc(name)}</div>
+        <div class="ct">${p.headline?esc(p.headline)+" · ":""}<span class="v">signed in</span>${onHi?` · ${onHi} on HiRey`:""}</div></div>
+      </div>
+      <button class="row-link" id="acctEdit"><span>Edit my HiRey profile<span class="sub">Name, headline, bio — shown on your cards</span></span>${CHEV}</button>
+      ${url?`<button class="row-link" id="acctView"><span>View my public page<span class="sub">${esc(url.replace(/^https?:\/\//,""))}</span></span>${CHEV}</button>`:""}
+      <button class="row-link" id="acctOut"><span>Sign out</span>${CHEV}</button>
+      <p class="consent" style="margin-top:18px">Your diary stays on this device. Signing in only syncs your profile and lets the people you invite claim a real HiRey page.</p>`;
+    document.getElementById("acctEdit").onclick=hiProfileEditor;
+    const v=document.getElementById("acctView"); if(v&&url) v.onclick=()=>window.open(url,"_blank");
+    document.getElementById("acctOut").onclick=()=>{ HI.clear(); hideSheet("sheet","scrim"); renderAll(); updateMe(); toast("Signed out — your diary stays here"); };
+    return;
+  }
+  s.innerHTML=`
+    <div class="grip"></div>
+    <h2>Sign in to HiRey</h2>
+    <p class="auth-msg">Your diary already lives on this device. Sign in to put <b>your</b> profile on the we-met cards and let the people you meet claim a real HiRey page — they choose whether to accept.</p>
+    <div class="seg" id="authSeg">
+      <button data-m="email" class="${_auth.method==="email"?"on":""}">Email</button>
+      <button data-m="phone" class="${_auth.method==="phone"?"on":""}">Phone</button>
+      <button data-m="google" class="${_auth.method==="google"?"on":""}">Google</button>
+    </div>
+    <div id="authArea"></div>
+    <p class="sub" style="font-size:12.5px;color:var(--ink-faint);text-align:center;margin:16px 0 0">Just want a name on your cards? <a id="authLocal" style="color:var(--ink-soft);cursor:pointer;text-decoration:underline">Set a local name</a></p>`;
+  document.querySelectorAll("#authSeg button").forEach(b=>b.onclick=()=>{ _auth={method:b.dataset.m,stage:"enter",flowId:null,value:"",busy:false}; renderAccount(); });
+  document.getElementById("authLocal").onclick=()=>nameEditor();
+  renderAuthArea();
+}
+function renderAuthArea(){
+  const a=document.getElementById("authArea"); if(!a) return; const m=_auth.method;
+  if(m==="google"){
+    a.innerHTML=`<button class="btn btn-google" id="gBtn"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.85 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.67 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Continue with Google</button>
+      <p class="sub" id="gHint" style="font-size:12.5px;color:var(--ink-faint);text-align:center;margin:12px 0 0">A Google window opens — sign in, then come back here.</p>`;
+    document.getElementById("gBtn").onclick=authGoogle; return;
+  }
+  const isPhone=m==="phone";
+  if(_auth.stage==="enter"){
+    a.innerHTML=`
+      <div class="field-label">${isPhone?"Your phone":"Your email"}</div>
+      <input type="text" id="authVal" placeholder="${isPhone?"+1 555 123 4567":"you@example.com"}" inputmode="${isPhone?"tel":"email"}" autocomplete="${isPhone?"tel":"email"}" value="${esc(_auth.value)}">
+      <button class="btn btn-primary" id="authGo" style="width:100%;margin-top:14px">Send code</button>`;
+    const inp=document.getElementById("authVal");
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); authSend(); }});
+    document.getElementById("authGo").onclick=authSend;
+    setTimeout(()=>inp.focus(),60);
+  } else {
+    a.innerHTML=`
+      <p class="auth-msg">Enter the 6-digit code we sent to <b>${esc(_auth.value)}</b>.</p>
+      <input type="text" id="authCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      <button class="btn btn-primary" id="authVerify" style="width:100%;margin-top:14px">Verify &amp; sign in</button>
+      <p class="sub" style="font-size:12.5px;text-align:center;margin:12px 0 0"><a id="authBack" style="color:var(--ink-soft);cursor:pointer;text-decoration:underline">Change ${isPhone?"phone":"email"}</a></p>`;
+    const inp=document.getElementById("authCode");
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); authVerify(); }});
+    document.getElementById("authVerify").onclick=authVerify;
+    document.getElementById("authBack").onclick=()=>{ _auth.stage="enter"; _auth.flowId=null; renderAccount(); };
+    setTimeout(()=>inp.focus(),60);
+  }
+}
+async function authSend(){
+  if(_auth.busy) return; const v=(document.getElementById("authVal").value||"").trim(); if(!v){ toast("Enter your "+(_auth.method==="phone"?"phone":"email")); return; }
+  _auth.value=v; _auth.busy=true; const btn=document.getElementById("authGo"); if(btn){ btn.textContent="Sending…"; btn.disabled=true; }
+  try{
+    const body=_auth.method==="phone"?{phone:v}:{email:v};
+    const r=await HI.post("/v1/auth/web/"+_auth.method+"/start",body,false);
+    _auth.flowId=r.flow_id; _auth.stage="code"; _auth.busy=false; renderAccount();
+  }catch(e){ _auth.busy=false; if(btn){ btn.textContent="Send code"; btn.disabled=false; }
+    toast(e.message==="invalid_email"?"That email looks off":e.message==="invalid_phone"?"That phone looks off":e.message==="too_many_codes"?"Too many codes — wait a bit":"Could not send code"); }
+}
+async function authVerify(){
+  if(_auth.busy) return; const code=(document.getElementById("authCode").value||"").trim(); if(code.length<4){ toast("Enter the 6-digit code"); return; }
+  _auth.busy=true; const btn=document.getElementById("authVerify"); if(btn){ btn.textContent="Signing in…"; btn.disabled=true; }
+  try{
+    const r=await HI.post("/v1/auth/web/"+_auth.method+"/verify",{flow_id:_auth.flowId,code},false);
+    await finishAuth(r);
+  }catch(e){ _auth.busy=false; if(btn){ btn.textContent="Verify & sign in"; btn.disabled=false; }
+    toast(e.message==="wrong_code"?"Wrong code — try again":e.message==="expired"||e.message==="flow_not_found"?"Code expired — resend":e.message==="too_many_attempts"?"Too many tries — resend a new code":"Could not verify"); }
+}
+async function authGoogle(){
+  const hint=document.getElementById("gHint");
+  let popup=null; try{ popup=window.open("about:blank","hi_google","width=480,height=680"); }catch(_){}
+  try{
+    const r=await HI.post("/v1/auth/web/google/start",{},false);
+    if(popup){ try{ popup.location.href=r.authorize_url; }catch(_){ popup=null; } }
+    if(!popup){ if(hint) hint.innerHTML=`<a href="${esc(r.authorize_url)}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600">Open Google sign-in ›</a> — then return here.`; }
+    else if(hint) hint.textContent="Waiting for Google… finish in the other window.";
+    // poll
+    for(let i=0;i<150;i++){ await new Promise(res=>setTimeout(res,2000));
+      let pr; try{ pr=await HI.post("/v1/auth/web/google/poll",{flow_id:r.flow_id},false); }catch(e){ if(e.status===404) break; continue; }
+      if(pr.status==="verified"){ try{ popup&&popup.close(); }catch(_){} await finishAuth(pr); return; }
+    }
+    if(hint) hint.textContent="Timed out — tap to try again.";
+  }catch(e){ try{ popup&&popup.close(); }catch(_){} toast("Google sign-in unavailable"); }
+}
+async function finishAuth(tok){
+  HI.onToken(tok); _auth.busy=false;
+  await hiSyncProfile(); await hiRefreshConsent();
+  hideSheet("sheet","scrim"); renderAll(); updateMe();
+  const nm=HI.myName(); toast(nm?("Signed in — welcome, "+nm.split(" ")[0]):"Signed in to HiRey");
+  if(!HI.myName()) hiProfileEditor();
+}
+function hiProfileEditor(){
+  const p=HI.profile||{};
+  document.getElementById("sheet").innerHTML=`
+    <div class="grip"></div>
+    <h2>Your HiRey profile</h2>
+    <p class="auth-msg">This is <b>you</b> — it shows on your public page and the we-met cards you send.</p>
+    <div class="field-label">Name</div>
+    <input type="text" id="hpName" placeholder="e.g. Walter Chen" value="${esc(p.display_name||"")}" autocapitalize="words">
+    <div class="field-label" style="margin-top:14px">Headline &mdash; optional</div>
+    <input type="text" id="hpHead" placeholder="e.g. Founder, HiRey · SF" value="${esc(p.headline||"")}">
+    <div class="field-label" style="margin-top:14px">About &mdash; optional</div>
+    <textarea id="hpBio" placeholder="A line or two about you">${esc(p.bio_markdown||"")}</textarea>
+    <div class="sheet-actions"><button class="btn btn-ghost" id="hpBack">Back</button><button class="btn btn-primary" id="hpSave" style="flex:1">Save</button></div>`;
+  showSheet("sheet","scrim");
+  document.getElementById("hpBack").onclick=()=>renderAccount();
+  document.getElementById("hpSave").onclick=hiSaveProfile;
+}
+async function hiSaveProfile(){
+  const name=document.getElementById("hpName").value.trim();
+  const headline=document.getElementById("hpHead").value.trim();
+  const bio=document.getElementById("hpBio").value.trim();
+  if(!name){ toast("Add your name"); return; }
+  const btn=document.getElementById("hpSave"); btn.textContent="Saving…"; btn.disabled=true;
+  try{
+    const r=await HI.call("hi.owners",{action:"update_profile",display_name:name,headline,bio_markdown:bio});
+    HI.profile=r.owner_profile||Object.assign({},HI.profile,{display_name:name,headline,bio_markdown:bio});
+    const s=HI.session()||{}; s.display_name=name; HI.save(s);
+    renderAll(); updateMe(); renderAccount(); toast("Profile saved");
+  }catch(e){ btn.textContent="Save"; btn.disabled=false; toast(e.status===401?"Session expired — sign in again":"Could not save profile"); }
+}
+/* Become a connector (idempotent) then report a real, consented "I met them". */
+async function hiInvite(pid){
+  const p=personById(pid); if(!p) return;
+  const inp=document.getElementById("hiContact"); const contact=(inp?inp.value:p.contact||"").trim();
+  if(!contact){ toast("Add their email or phone first"); if(inp) inp.focus(); return; }
+  const isEmail=/@/.test(contact);
+  const btn=document.getElementById("hiSend"); if(btn){ btn.textContent="Sending…"; btn.disabled=true; }
+  try{
+    try{ await HI.call("hi.connectors",{action:"enroll"}); }catch(_){}
+    const body={action:"report_met_person",permission_attested:true,display_name:p.name,when:"met"};
+    if(isEmail) body.email=contact; else body.phone=contact;
+    if(p.note) body.note=p.note;
+    await HI.call("hi.connectors",body);
+    p.contact=contact; p.invited=true; p.hiInvited=true; await dbPut("people",p);
+    await hiRefreshConsent();
+    renderPerson(pid); renderAll();
+    toast(p.name.split(" ")[0]+" was invited to HiRey");
+  }catch(e){ if(btn){ btn.textContent="Send HiRey invite"; btn.disabled=false; }
+    toast(e.status===401?"Sign in again to invite":e.message==="invalid_phone"?"That phone looks off":"Could not send invite"); }
+}
 async function invitePerson(pid){ const p=personById(pid); if(!p) return;
   const me=getMyName(), first=p.name.split(" ")[0];
   const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name);
@@ -673,7 +944,8 @@ window._seedDemo=async function(){
   await loadAll(); renderAll(); toast("Demo data loaded"); console.log("seeded"); };
 
 /* ========================= boot ========================= */
-(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName(); }
+(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName();
+    if(HI.authed()){ (async()=>{ await hiSyncProfile(); await hiRefreshConsent(); renderAll(); })(); } }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
 </body>

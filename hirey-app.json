@@ -1,6 +1,6 @@
 {
   "name": "Who I Met",
-  "description": "Capture the people you meet each day — by photo, voice, or a quick note — into a private, on-device people diary and a living map of your network. Built to later let each person claim their own Hi profile and mutually tag into a consented relationship edge. Invitation-based by design: no 1:N face search, ever.",
+  "description": "Capture the people you meet each day — by photo, voice, or a quick note — into a private, on-device people diary and a living map of your network. Sign in to HiRey (email, phone, or Google) to put your real profile on the we-met cards and send a consented invite so each person can claim their own Hi page — accept or decline, no face search, ever.",
   "homepage": "https://github.com/walter2wer/who-i-met-today",
   "web": "https://walter2wer.github.io/who-i-met-today/",
   "command": "python3 -m http.server 4178",
@@ -14,15 +14,17 @@
     "diary",
     "relationships",
     "introductions",
+    "connector",
     "consent",
+    "sign-in",
     "photo",
     "voice"
   ],
   "capabilities": [
     "hi.owners",
+    "hi.connectors",
     "hi.social-relationships",
-    "hi.pairings",
-    "hi.owner-videos"
+    "hi.pairings"
   ],
   "license": "MIT"
 }
