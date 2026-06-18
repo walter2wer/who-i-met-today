@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#fbfaf7">
+<meta name="color-scheme" content="light">
+<title>Who I Met · HiRey</title>
+<style>
+  :root{
+    --ink:#161412; --ink-soft:rgba(22,20,18,.62); --ink-faint:rgba(22,20,18,.42);
+    --gold:#d18a00; --blue:#2467e8; --green:#34c759; --purple:#7c4dff;
+    --paper:#fbfaf7; --card:#ffffff; --line:rgba(22,20,18,.10); --line-2:rgba(22,20,18,.16);
+    --shadow:0 18px 48px rgba(20,18,16,.18); --shadow-sm:0 8px 22px rgba(20,18,16,.12);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    --nav-h:60px; --max:480px; color-scheme:light;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;line-height:1.5}
+  ::selection{background:var(--ink);color:var(--paper)}
+  button{font-family:inherit}
+  #app{max-width:var(--max);margin:0 auto;min-height:100vh;background:var(--paper);
+    padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 28px)}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-faint);font-weight:600}
+  .eyebrow.sec{display:block;margin:0 0 14px}
+  @keyframes livedot{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.5)}50%{box-shadow:0 0 0 5px rgba(52,199,89,.05)}}
+  @keyframes cardin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+  /* ---------- header ---------- */
+  header{position:sticky;top:0;z-index:30;background:rgba(251,250,247,.85);
+    backdrop-filter:saturate(160%) blur(12px);-webkit-backdrop-filter:saturate(160%) blur(12px);
+    border-bottom:.5px solid var(--line);padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;
+    display:flex;align-items:center;gap:12px}
+  .brand .t{font-family:var(--serif);font-size:21px;font-weight:600;letter-spacing:-.01em;
+    line-height:1;display:flex;align-items:center;gap:8px}
+  .brand .t .ld{width:8px;height:8px;border-radius:50%;background:var(--green);animation:livedot 2.4s infinite}
+  .brand .sub{font-size:11.5px;color:var(--ink-faint);margin-top:5px;font-weight:500}
+  .hdr-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .hdr-count{text-align:right;font-size:12px;color:var(--ink-soft);line-height:1.2;font-weight:500}
+  .hdr-count b{font-family:var(--serif);font-size:18px;color:var(--ink);font-weight:600;display:block}
+  .add-btn{width:42px;height:42px;border-radius:50%;background:var(--ink);color:#fff;border:0;
+    display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .12s}
+  .add-btn:active{transform:scale(.92)}
+  .add-btn svg{width:20px;height:20px}
+  /* ---------- views ---------- */
+  main{padding:22px 18px 26px}
+  .view{display:none}
+  .view.active{display:block}
+  .view-title{font-family:var(--serif);font-size:30px;font-weight:600;letter-spacing:-.01em;margin:6px 0 0;line-height:1.05}
+  /* today hero */
+  .hero{padding:4px 2px 22px;border-bottom:.5px solid var(--line);margin-bottom:24px}
+  .hero h2{font-family:var(--serif);font-weight:600;font-size:27px;letter-spacing:-.01em;margin:8px 0 20px;line-height:1.12}
+  .cap-row{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{font-size:14.5px;font-weight:600;padding:13px 22px;cursor:pointer;border:0;border-radius:999px;
+    transition:transform .1s, box-shadow .15s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--ink);color:#fff;box-shadow:var(--shadow-sm)}
+  .btn-ghost{background:var(--card);color:var(--ink);border:.5px solid var(--line);box-shadow:var(--shadow-sm)}
+  .btn svg{width:17px;height:17px}
+  .btn-soft{width:100%;background:rgba(36,103,232,.08);color:var(--blue);box-shadow:none;border:0;justify-content:center}
+  .btn-soft:active{background:rgba(36,103,232,.14)}
+  .btn-soft svg{width:18px;height:18px}
+  .or{display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--ink-faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;font-weight:600}
+  .or::before,.or::after{content:"";flex:1;height:.5px;background:var(--line)}
+  .mic-row{display:flex;align-items:center;gap:14px;margin:2px 0 16px}
+  .mic-btn{width:58px;height:58px;border-radius:50%;border:0;background:var(--ink);color:#fff;display:grid;place-items:center;cursor:pointer;flex:0 0 auto;box-shadow:var(--shadow-sm);transition:transform .1s}
+  .mic-btn:active{transform:scale(.93)}
+  .mic-btn svg{width:25px;height:25px}
+  .mic-btn.live{background:var(--green);animation:micpulse 1.5s infinite}
+  @keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.5)}50%{box-shadow:0 0 0 14px rgba(52,199,89,0)}}
+  .mic-hint{font-size:13.5px;color:var(--ink-soft);line-height:1.45}
+  .privacy{font-size:12.5px;color:var(--ink-soft);margin-top:18px;display:flex;gap:8px;align-items:baseline;line-height:1.5;font-weight:500}
+  .privacy svg{width:13px;height:13px;flex:0 0 auto;opacity:.5;transform:translateY(2px)}
+  /* day label */
+  .day-label{display:flex;align-items:center;gap:12px;margin:28px 0 14px}
+  .day-label .d{font-family:var(--serif);font-style:italic;font-size:18px;font-weight:500;white-space:nowrap}
+  .day-label .c{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);white-space:nowrap;font-weight:600}
+  .day-label::after{content:"";flex:1;height:.5px;background:var(--line)}
+  /* meeting card */
+  .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow-sm);overflow:hidden;
+    margin-bottom:16px;animation:cardin .42s cubic-bezier(.2,.8,.2,1) both}
+  .card .ph{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:#f0ece2}
+  .card .body{padding:13px 16px 16px}
+  .card .who{display:flex;flex-wrap:wrap;gap:5px 16px;align-items:center;margin-bottom:6px}
+  .chip{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--ink);cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;line-height:1.25}
+  .chip:active{opacity:.6}
+  .chip .pd{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .chip.add{font-family:var(--sans);font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-faint);font-weight:600}
+  .card .cap{font-size:14.5px;color:var(--ink-soft);margin:0;line-height:1.5}
+  .card .meta{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);margin-top:10px;font-weight:600}
+  /* stats */
+  .stats{display:flex;background:var(--card);border-radius:16px;box-shadow:var(--shadow-sm);margin:18px 0 26px;overflow:hidden}
+  .stat{flex:1;padding:15px 6px 13px;text-align:center;border-left:.5px solid var(--line)}
+  .stat:first-child{border-left:0}
+  .stat b{font-family:var(--serif);font-size:25px;font-weight:600;display:block;line-height:1}
+  .stat span{font-size:9.5px;text-transform:uppercase;letter-spacing:.11em;color:var(--ink-faint);display:block;margin-top:7px;font-weight:600}
+  /* people grid */
+  .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px 14px}
+  .person{cursor:pointer;animation:cardin .42s cubic-bezier(.2,.8,.2,1) both}
+  .ava-wrap{position:relative;width:84%;margin:0 auto}
+  .ava{width:100%;aspect-ratio:1;border-radius:50%;object-fit:cover;background:#fff;display:block}
+  .ava-fb{display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:24px}
+  .person .nm{font-family:var(--serif);font-size:15px;font-weight:600;margin-top:12px;text-align:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .person .ct{font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-faint);text-align:center;margin-top:3px;font-weight:600}
+  .dot{position:absolute;bottom:4px;right:4px;width:14px;height:14px;border-radius:50%;background:var(--green);
+    border:2.5px solid var(--paper);animation:livedot 2.4s infinite}
+  /* empty */
+  .empty{text-align:center;color:var(--ink-soft);padding:50px 24px}
+  .empty .ico{width:46px;height:46px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;
+    background:rgba(52,199,89,.12);color:var(--green)}
+  .empty .ico svg{width:22px;height:22px}
+  .empty h3{font-family:var(--serif);font-weight:600;font-size:20px;color:var(--ink);margin:0 0 7px}
+  .empty p{margin:0 auto;font-size:14px;max-width:240px;line-height:1.55;font-weight:500}
+  /* ---------- floating nav ---------- */
+  nav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 10px);
+    width:calc(100% - 24px);max-width:calc(var(--max) - 20px);height:var(--nav-h);
+    background:rgba(251,250,247,.9);backdrop-filter:saturate(160%) blur(16px);-webkit-backdrop-filter:saturate(160%) blur(16px);
+    border:.5px solid var(--line);border-radius:22px;box-shadow:var(--shadow);display:flex;z-index:40}
+  .tab{flex:1;background:none;border:0;cursor:pointer;color:var(--ink-faint);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px}
+  .tab svg{width:21px;height:21px}
+  .tab span{font-size:10.5px;font-weight:600;letter-spacing:.01em}
+  .tab.active{color:var(--ink)}
+  .tab.active svg{stroke-width:2}
+  /* ---------- sheets ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(22,20,18,.4);z-index:50;opacity:0;pointer-events:none;transition:opacity .22s;backdrop-filter:blur(2px)}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(100%);bottom:0;width:100%;
+    max-width:var(--max);background:var(--paper);z-index:60;border-radius:24px 24px 0 0;
+    padding:8px 20px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -12px 44px rgba(20,18,16,.22);
+    transition:transform .3s cubic-bezier(.2,.8,.2,1);max-height:93vh;overflow-y:auto}
+  .sheet.show{transform:translateX(-50%) translateY(0)}
+  .grip{width:38px;height:4px;border-radius:999px;background:var(--line-2);margin:9px auto 16px}
+  .sheet h2{font-family:var(--serif);font-size:25px;font-weight:600;letter-spacing:-.01em;margin:0 0 16px}
+  .preview-wrap{margin-bottom:16px}
+  .preview-wrap img{width:100%;display:block;max-height:46vh;object-fit:cover;border-radius:16px}
+  .field-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-faint);margin:0 0 9px;font-weight:600}
+  input[type=text],textarea{width:100%;font-family:inherit;font-size:16px;padding:13px 16px;border-radius:14px;
+    border:.5px solid var(--line-2);background:var(--card);color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
+  input[type=text]::placeholder{color:var(--ink-faint)}
+  input[type=text]:focus,textarea:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(22,20,18,.06)}
+  textarea{resize:vertical;min-height:66px;line-height:1.5}
+  .added{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0 0}
+  .added .tag{font-family:var(--serif);font-size:15px;font-weight:600;border-radius:999px;padding:7px 14px;cursor:pointer;
+    display:inline-flex;gap:8px;align-items:center}
+  .added .tag .x{font-family:var(--sans);font-size:13px;font-weight:600;opacity:.6}
+  .suggest{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+  .suggest .s{background:var(--card);border:.5px solid var(--line);color:var(--ink-soft);font-size:13.5px;font-weight:500;
+    padding:7px 14px;cursor:pointer;border-radius:999px;box-shadow:var(--shadow-sm)}
+  .suggest .s:hover{color:var(--ink)}
+  .sheet-actions{display:flex;gap:10px;margin-top:20px}
+  .sheet-actions .btn{flex:1}
+  .hidden{display:none!important}
+  /* person detail */
+  .pd-head{display:flex;align-items:center;gap:15px;margin-bottom:2px}
+  .pd-head .ava{width:62px;height:62px;flex:0 0 auto}
+  .pd-head .nm{font-family:var(--serif);font-size:24px;font-weight:600;line-height:1.1}
+  .pd-head .ct{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);margin-top:6px;font-weight:600}
+  .pd-actions{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}
+  .mini{font-size:12.5px;font-weight:600;padding:9px 15px;border:.5px solid var(--line-2);
+    background:var(--card);color:var(--ink);cursor:pointer;border-radius:999px;box-shadow:var(--shadow-sm)}
+  .mini.on{background:var(--green);color:#fff;border-color:transparent}
+  .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}
+  .thumbs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:13px}
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 30px);transform:translateX(-50%) translateY(18px);
+    background:var(--ink);color:#fff;font-size:14px;font-weight:500;padding:12px 20px;border-radius:999px;
+    z-index:80;opacity:0;transition:all .25s;max-width:88%;text-align:center;box-shadow:var(--shadow)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="t"><span class="ld"></span>Who I Met</div>
+      <div class="sub">by HiRey · live on this device</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-count"><b id="hdrCount">0</b>people</div>
+      <button class="add-btn" id="navCap" aria-label="Take photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- TODAY -->
+    <section class="view active" id="v-today">
+      <div class="hero">
+        <span class="eyebrow">Today</span>
+        <h2>Who did you meet?</h2>
+        <div class="cap-row">
+          <button class="btn btn-primary" id="btnCapture">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4l1.5 2h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2z"/><circle cx="12" cy="12.5" r="3.4"/></svg>
+            Take a photo
+          </button>
+          <button class="btn btn-ghost" id="btnLibrary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            From library
+          </button>
+        </div>
+        <div class="or"><span>or</span></div>
+        <button class="btn btn-soft" id="btnVoice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          Just say or write who you met
+        </button>
+        <div class="privacy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <span>Everything stays on this device. Nothing is published — claiming and mutual tags come later.</span>
+        </div>
+      </div>
+      <span class="eyebrow sec">Today&rsquo;s moments</span>
+      <div id="todayList"></div>
+    </section>
+
+    <!-- DIARY -->
+    <section class="view" id="v-diary">
+      <span class="eyebrow">Diary</span>
+      <div class="view-title">Day by day.</div>
+      <div id="diaryList" style="margin-top:6px"></div>
+    </section>
+
+    <!-- PEOPLE -->
+    <section class="view" id="v-people">
+      <span class="eyebrow">My network</span>
+      <div class="view-title">Your circle.</div>
+      <div class="stats">
+        <div class="stat"><b id="stPeople">0</b><span>met</span></div>
+        <div class="stat"><b id="stMeetings">0</b><span>moments</span></div>
+        <div class="stat"><b id="stWeek">0</b><span>this week</span></div>
+      </div>
+      <div id="peopleGrid"></div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="tab active" data-view="today">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      <span>Today</span>
+    </button>
+    <button class="tab" data-view="diary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/></svg>
+      <span>Diary</span>
+    </button>
+    <button class="tab" data-view="people">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M16 14.6a4.8 4.8 0 0 1 4.5 4.4"/></svg>
+      <span>People</span>
+    </button>
+  </nav>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div class="scrim" id="scrim2"></div>
+<div class="sheet" id="sheet2"></div>
+<div class="toast" id="toast"></div>
+
+<input type="file" id="fileCam" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="fileLib" accept="image/*" class="hidden">
+
+<script>
+"use strict";
+/* ========================= storage (IndexedDB) ========================= */
+const DB_NAME="wimt-db", DB_VER=1; let _db=null;
+function openDB(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,DB_VER);
+  r.onupgradeneeded=e=>{ const db=e.target.result;
+    if(!db.objectStoreNames.contains("people")) db.createObjectStore("people",{keyPath:"id"});
+    if(!db.objectStoreNames.contains("meetings")){ const s=db.createObjectStore("meetings",{keyPath:"id"}); s.createIndex("createdAt","createdAt"); } };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function store(s,m){ return _db.transaction(s,m).objectStore(s); }
+function dbGetAll(s){ return new Promise((res,rej)=>{ const r=store(s,"readonly").getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function dbPut(s,v){ return new Promise((res,rej)=>{ const r=store(s,"readwrite").put(v); r.onsuccess=()=>res(v); r.onerror=()=>rej(r.error); }); }
+function dbDel(s,k){ return new Promise((res,rej)=>{ const r=store(s,"readwrite").delete(k); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+
+/* ========================= state / helpers ========================= */
+const state={ people:[], meetings:[], urls:new Map() };
+const uid=()=>(Date.now().toString(36)+Math.random().toString(36).slice(2,8));
+const norm=s=>s.trim().toLowerCase().replace(/\s+/g," ");
+const esc=s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const initials=name=>{ const p=name.trim().split(/\s+/); return ((p[0]?.[0]||"")+(p[1]?.[0]||"")).toUpperCase()||"?"; };
+const PCOLORS=[
+  {a:"#d18a00",d:"#8a5c00",g:"rgba(209,138,0,.42)",t:"rgba(209,138,0,.15)"},
+  {a:"#2467e8",d:"#1b4fb8",g:"rgba(36,103,232,.40)",t:"rgba(36,103,232,.13)"},
+  {a:"#34c759",d:"#1d7c3e",g:"rgba(52,199,89,.42)",t:"rgba(52,199,89,.16)"},
+  {a:"#7c4dff",d:"#5b32c7",g:"rgba(124,77,255,.40)",t:"rgba(124,77,255,.14)"},
+];
+const pcolor=seed=>{ let h=0; for(const c of (seed||"?")) h=(h*31+c.charCodeAt(0))>>>0; return PCOLORS[h%4]; };
+
+async function loadAll(){
+  state.people=await dbGetAll("people");
+  state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
+  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
+  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+}
+const photoURL=m=>state.urls.get(m.id)||"";
+const personById=id=>state.people.find(p=>p.id===id);
+const meetCount=pid=>state.meetings.filter(m=>m.personIds.includes(pid)).length;
+const latestPhotoFor=pid=>{ const m=state.meetings.find(m=>m.personIds.includes(pid)&&m.photo); return m?photoURL(m):""; };
+function avaHTML(p){ const c=pcolor(p.name), av=latestPhotoFor(p.id);
+  const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
+  return av?`<img class="ava" src="${av}" style="${ring}">`
+    :`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(p.name)}</div>`; }
+
+async function resolvePerson(name){ const n=norm(name); if(!n) return null;
+  let p=state.people.find(p=>p.nameLower===n); if(p) return p.id;
+  p={ id:uid(), name:name.trim(), nameLower:n, note:"", followUp:false, createdAt:Date.now() };
+  await dbPut("people",p); state.people.push(p); return p.id; }
+
+function downscale(file,max=1400,q=.85){ return new Promise(res=>{ const img=new Image();
+  img.onload=()=>{ let{width:w,height:h}=img; if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(img,0,0,w,h);
+    c.toBlob(b=>res(b||file),"image/jpeg",q); };
+  img.onerror=()=>res(file); img.src=URL.createObjectURL(file); }); }
+
+/* ========================= capture sheet ========================= */
+let pending={ blob:null, url:"", names:[] };
+function openCaptureSheet(blob){ pending={ blob, url:URL.createObjectURL(blob), names:[] };
+  renderCaptureSheet(); showSheet("sheet","scrim"); setTimeout(()=>document.getElementById("nameInput")?.focus(),340); }
+function renderCaptureSheet(){
+  const recent=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id))
+    .map(p=>p.name).filter(n=>!pending.names.some(x=>norm(x)===norm(n))).slice(0,6);
+  document.getElementById("sheet").innerHTML=`
+    <div class="grip"></div>
+    <h2>Who did you meet?</h2>
+    <div class="preview-wrap"><img src="${pending.url}" alt=""></div>
+    <input type="text" id="nameInput" placeholder="Type a name, then Enter" autocomplete="off" autocapitalize="words">
+    <div class="added" id="added">${pending.names.map(n=>{ const c=pcolor(n);
+      return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("")}</div>
+    ${recent.length?`<div class="suggest">${recent.map(n=>`<button class="s" data-s="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}
+    <div class="field-label" style="margin-top:20px">Note &mdash; optional</div>
+    <input type="text" id="capNote" placeholder="coffee @ Ritual, talked about the seed round" autocomplete="off">
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="capCancel">Cancel</button>
+      <button class="btn btn-primary" id="capSave">Save moment</button>
+    </div>`;
+  const input=document.getElementById("nameInput");
+  input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addName(input.value); input.value=""; }});
+  document.querySelectorAll("#added .tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderCaptureSheet(); });
+  document.querySelectorAll("#sheet .s").forEach(b=>b.onclick=()=>addName(b.dataset.s));
+  document.getElementById("capCancel").onclick=closeCaptureSheet;
+  document.getElementById("capSave").onclick=saveMoment;
+}
+function addName(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
+  renderCaptureSheet(); document.getElementById("nameInput")?.focus(); }
+function closeCaptureSheet(){ if(typeof stopRec==="function") stopRec(); hideSheet("sheet","scrim"); if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]}; }
+async function saveMoment(){
+  const note=document.getElementById("capNote").value.trim();
+  const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
+  const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
+  await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:pending.blob, caption:note, personIds:ids });
+  closeCaptureSheet(); await loadAll(); renderAll();
+  toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); switchView("today");
+}
+
+/* ========================= person detail ========================= */
+function openPerson(pid){ renderPerson(pid); showSheet("sheet2","scrim2"); }
+function renderPerson(pid){ const p=personById(pid); if(!p) return;
+  const ms=state.meetings.filter(m=>m.personIds.includes(pid)); const last=ms[0]?relDay(ms[0].createdAt):"—";
+  document.getElementById("sheet2").innerHTML=`
+    <div class="grip"></div>
+    <div class="pd-head">${avaHTML(p)}
+      <div><div class="nm">${esc(p.name)}</div>
+      <div class="ct">${ms.length} moment${ms.length===1?"":"s"} · last ${last}</div></div></div>
+    <div class="pd-actions">
+      <button class="mini ${p.followUp?"on":""}" id="pdFollow">${p.followUp?"Following up":"Follow up"}</button>
+      <button class="mini" id="pdRename">Rename</button>
+      <button class="mini" id="pdDelete">Delete</button></div>
+    <div class="field-label">Notes</div>
+    <textarea id="pdNote" placeholder="Context, intro angle, where you met…">${esc(p.note)}</textarea>
+    <span class="eyebrow sec" style="margin:22px 0 12px">Moments</span>
+    <div class="thumbs">${ms.map(m=>m.photo?`<img src="${photoURL(m)}">`:"").join("")||'<div class="ct">No photos yet.</div>'}</div>
+    <div class="sheet-actions"><button class="btn btn-ghost" id="pdClose">Close</button></div>`;
+  document.getElementById("pdClose").onclick=()=>hideSheet("sheet2","scrim2");
+  document.getElementById("pdNote").addEventListener("change",async e=>{ p.note=e.target.value; await dbPut("people",p); });
+  document.getElementById("pdFollow").onclick=async()=>{ p.followUp=!p.followUp; await dbPut("people",p); renderPerson(pid); renderAll(); };
+  document.getElementById("pdRename").onclick=async()=>{ const nn=prompt("New name",p.name); if(nn&&nn.trim()){ p.name=nn.trim(); p.nameLower=norm(nn); await dbPut("people",p); renderPerson(pid); renderAll(); } };
+  document.getElementById("pdDelete").onclick=async()=>{ if(!confirm(`Delete ${p.name}? Their moments stay but lose this tag.`)) return;
+    for(const m of state.meetings){ if(m.personIds.includes(pid)){ m.personIds=m.personIds.filter(x=>x!==pid); await dbPut("meetings",m); } }
+    await dbDel("people",pid); hideSheet("sheet2","scrim2"); await loadAll(); renderAll(); };
+}
+
+/* ========================= sheets / toast ========================= */
+function showSheet(s,sc){ document.getElementById(sc).classList.add("show"); requestAnimationFrame(()=>document.getElementById(s).classList.add("show")); }
+function hideSheet(s,sc){ document.getElementById(s).classList.remove("show"); document.getElementById(sc).classList.remove("show"); }
+document.getElementById("scrim").onclick=closeCaptureSheet;
+document.getElementById("scrim2").onclick=()=>hideSheet("sheet2","scrim2");
+let toastT=null;
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2400); }
+
+/* ========================= rendering ========================= */
+function relDay(ts){ const d=new Date(ts), now=new Date(); const dk=x=>new Date(x).setHours(0,0,0,0);
+  const diff=Math.round((dk(now)-dk(d))/86400000);
+  if(diff===0) return "today"; if(diff===1) return "yesterday";
+  if(diff<7) return d.toLocaleDateString(undefined,{weekday:"long"});
+  return d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+function timeStr(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); }
+function dayKey(ts){ return new Date(ts).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}); }
+
+function meetingCardHTML(m,i=0){
+  const ppl=m.personIds.map(id=>personById(id)).filter(Boolean);
+  const chips=ppl.length?ppl.map(p=>`<span class="chip" data-pid="${p.id}"><span class="pd" style="background:${pcolor(p.name).a}"></span>${esc(p.name)}</span>`).join("")
+    :`<span class="chip add">+ add a name</span>`;
+  return `<div class="card" data-mid="${m.id}" style="animation-delay:${i*45}ms">
+    ${m.photo?`<img class="ph" src="${photoURL(m)}" loading="lazy">`:""}
+    <div class="body"><div class="who">${chips}</div>
+    ${m.caption?`<div class="cap">${esc(m.caption)}</div>`:""}
+    <div class="meta">${timeStr(m.createdAt)}</div></div></div>`;
+}
+function wireCards(root){
+  root.querySelectorAll(".chip[data-pid]").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
+  root.querySelectorAll(".chip.add").forEach(c=>c.onclick=()=>retag(c.closest(".card").dataset.mid));
+}
+function retag(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m) return;
+  pending={ blob:m.photo, url:m.photo?URL.createObjectURL(m.photo):"", names:[] };
+  renderCaptureSheet(); showSheet("sheet","scrim");
+  document.getElementById("capSave").onclick=async()=>{
+    const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
+    const ids=[...m.personIds]; for(const n of pending.names){ const id=await resolvePerson(n); if(id&&!ids.includes(id)) ids.push(id); }
+    m.personIds=ids; const note=document.getElementById("capNote").value.trim(); if(note) m.caption=note;
+    await dbPut("meetings",m); closeCaptureSheet(); await loadAll(); renderAll(); toast("Tags updated"); }; }
+
+function renderToday(){ const start=new Date().setHours(0,0,0,0);
+  const today=state.meetings.filter(m=>m.createdAt>=start); const el=document.getElementById("todayList");
+  if(!today.length){ el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4l1.5 2h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2z"/><circle cx="12" cy="12.5" r="3.4"/></svg></div><h3>No one yet today</h3><p>Tap “Take a photo” the next time you meet someone.</p></div>`; return; }
+  el.innerHTML=today.map((m,i)=>meetingCardHTML(m,i)).join(""); wireCards(el); }
+function renderDiary(){ const el=document.getElementById("diaryList");
+  if(!state.meetings.length){ el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/></svg></div><h3>Your diary is empty</h3><p>Everyone you capture is collected here, by the day.</p></div>`; return; }
+  const groups={}; for(const m of state.meetings){ const k=dayKey(m.createdAt); (groups[k]=groups[k]||[]).push(m); }
+  let i=0; el.innerHTML=Object.entries(groups).map(([k,ms])=>{ const n=new Set(ms.flatMap(m=>m.personIds)).size;
+    return `<div class="day-label"><span class="d">${k}</span><span class="c">${n||"0"} ${n===1?"person":"people"}</span></div>${ms.map(m=>meetingCardHTML(m,i++)).join("")}`;
+  }).join(""); wireCards(el); }
+function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate()-7); return d.getTime(); })();
+  document.getElementById("stPeople").textContent=state.people.length;
+  document.getElementById("stMeetings").textContent=state.meetings.length;
+  document.getElementById("stWeek").textContent=new Set(state.meetings.filter(m=>m.createdAt>=wk).flatMap(m=>m.personIds)).size;
+  const el=document.getElementById("peopleGrid");
+  if(!state.people.length){ el.className=""; el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/></svg></div><h3>No one here yet</h3><p>Your circle grows each time you capture a face.</p></div>`; return; }
+  el.className="pgrid";
+  const sorted=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)||b.createdAt-a.createdAt);
+  el.innerHTML=sorted.map((p,i)=>{ const ct=meetCount(p.id);
+    return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${p.followUp?'<span class="dot"></span>':""}</div>
+      <div class="nm">${esc(p.name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`; }).join("");
+  el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
+}
+function renderAll(){ renderToday(); renderDiary(); renderPeople(); document.getElementById("hdrCount").textContent=state.people.length; }
+
+/* ========================= nav / capture wiring ========================= */
+function switchView(v){ document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="v-"+v));
+  document.querySelectorAll(".tab[data-view]").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  window.scrollTo({top:0,behavior:"smooth"}); }
+document.querySelectorAll(".tab[data-view]").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
+const fileCam=document.getElementById("fileCam"), fileLib=document.getElementById("fileLib");
+document.getElementById("btnCapture").onclick=()=>fileCam.click();
+document.getElementById("navCap").onclick=()=>fileCam.click();
+document.getElementById("btnLibrary").onclick=()=>fileLib.click();
+document.getElementById("btnVoice").onclick=openVoiceSheet;
+async function onFile(e){ const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return; openCaptureSheet(await downscale(f)); }
+fileCam.onchange=onFile; fileLib.onchange=onFile;
+
+/* ========================= voice / text quick add ========================= */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition; let rec=null, listening=false;
+const VSTOP=new Set("i im met meet saw seen see today yesterday tomorrow morning afternoon evening tonight night at we the a an and or but with to of in on for from he she they them my his her their your our it its this that these those then so also too just had has have having got get gonna was were is are be been new old some nice great good cool awesome guy girl dude folks people founder cofounder ceo cto coo cfo vp head lead vc angel investor partner engineer designer pm coffee lunch dinner drinks brunch breakfast meeting call event party afterparty mixer demo day talk talked talking spoke speaking chat chatting chatted ran run running into about over here there really very super".split(" "));
+function detectNames(text){ const out=[], seen=new Set(pending.names.map(norm)); const low=" "+text.toLowerCase().replace(/[^\w\s'’]/g," ")+" ";
+  for(const p of state.people){ if(p.nameLower&&low.includes(" "+p.nameLower+" ")&&!seen.has(p.nameLower)){ out.push(p.name); seen.add(p.nameLower);} }
+  const re=/\b([A-Z][a-zA-Z'’]+(?:\s+[A-Z][a-zA-Z'’]+){0,2})\b/g; let m;
+  while((m=re.exec(text))){ const parts=m[1].trim().split(/\s+/).filter(w=>!VSTOP.has(w.toLowerCase()));
+    if(!parts.length) continue; const name=parts.join(" "); if(name.length<2||seen.has(norm(name))) continue; out.push(name); seen.add(norm(name)); }
+  return out.slice(0,8); }
+function openVoiceSheet(){ pending={ blob:null, url:"", names:[] }; renderVoiceSheet(); showSheet("sheet","scrim"); setTimeout(()=>document.getElementById("voiceText")?.focus(),320); }
+function renderVoiceSheet(){
+  document.getElementById("sheet").innerHTML=`
+    <div class="grip"></div>
+    <h2>Who did you meet?</h2>
+    <div class="mic-row">
+      ${SR?`<button class="mic-btn" id="micBtn" aria-label="Speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>`:""}
+      <div class="mic-hint" id="micHint">${SR?"Tap the mic and just say it &mdash; or type below.":"Type who you met below."}</div>
+    </div>
+    <textarea id="voiceText" placeholder="Met Maya Chen at Ritual — she's raising a seed round. Ran into Dev Patel too." style="min-height:92px"></textarea>
+    <div class="field-label" style="margin-top:18px">People</div>
+    <input type="text" id="nameInput" placeholder="Add a name, then Enter" autocomplete="off" autocapitalize="words">
+    <div class="added" id="added"></div>
+    <div class="suggest" id="voiceSuggest"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="capCancel">Cancel</button>
+      <button class="btn btn-primary" id="capSave">Save moment</button>
+    </div>`;
+  document.getElementById("voiceText").addEventListener("input",renderVChips);
+  const input=document.getElementById("nameInput");
+  input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addNameV(input.value); input.value=""; }});
+  if(SR) document.getElementById("micBtn").onclick=toggleRec;
+  document.getElementById("capCancel").onclick=closeVoiceSheet;
+  document.getElementById("capSave").onclick=saveVoiceMoment;
+  renderVChips();
+}
+function renderVChips(){ const added=document.getElementById("added"); if(!added) return;
+  added.innerHTML=pending.names.map(n=>{ const c=pcolor(n);
+    return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("");
+  added.querySelectorAll(".tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderVChips(); });
+  const text=document.getElementById("voiceText")?.value||""; const det=detectNames(text);
+  const recent=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)).map(p=>p.name)
+    .filter(n=>!pending.names.some(x=>norm(x)===norm(n))&&!det.some(x=>norm(x)===norm(n)));
+  const sEl=document.getElementById("voiceSuggest"); const sugg=[...det,...recent].slice(0,8);
+  sEl.innerHTML=sugg.map(n=>`<button class="s" data-s="${esc(n)}">+ ${esc(n)}</button>`).join("");
+  sEl.querySelectorAll(".s").forEach(b=>b.onclick=()=>addNameV(b.dataset.s));
+}
+function addNameV(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n); renderVChips(); document.getElementById("nameInput")?.focus(); }
+function toggleRec(){ listening?stopRec():startRec(); }
+function startRec(){ if(!SR) return; try{ rec=new SR(); }catch(e){ toast("Voice not available here"); return; }
+  rec.lang=navigator.language||"en-US"; rec.interimResults=true; rec.continuous=true;
+  const ta=document.getElementById("voiceText"); const base=ta.value.trim();
+  rec.onresult=e=>{ let t=""; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; ta.value=(base?base+" ":"")+t; renderVChips(); };
+  rec.onerror=()=>stopRec(); rec.onend=()=>{ listening=false; micUI(); };
+  try{ rec.start(); listening=true; micUI(); }catch(e){} }
+function stopRec(){ try{ if(rec) rec.stop(); }catch(e){} listening=false; micUI(); }
+function micUI(){ const b=document.getElementById("micBtn"), h=document.getElementById("micHint");
+  if(b) b.classList.toggle("live",listening); if(h) h.innerHTML=listening?"Listening… tap to stop.":(SR?"Tap the mic and just say it &mdash; or type below.":"Type who you met below."); }
+function closeVoiceSheet(){ stopRec(); hideSheet("sheet","scrim"); pending={blob:null,url:"",names:[]}; }
+async function saveVoiceMoment(){
+  const note=document.getElementById("voiceText").value.trim();
+  const stray=document.getElementById("nameInput").value.trim(); if(stray) addNameV(stray);
+  if(!pending.names.length&&!note){ toast("Say or type something first"); return; }
+  const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
+  await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:null, caption:note, personIds:ids });
+  closeVoiceSheet(); await loadAll(); renderAll();
+  toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); switchView("today"); }
+
+/* ========================= dev seed (console only) ========================= */
+function monoBlob(seed){ return new Promise(res=>{ const c=document.createElement("canvas"); c.width=640; c.height=800;
+  const x=c.getContext("2d"); const col=pcolor(seed); x.fillStyle=col.t.replace(/[\d.]+\)$/,"1)"); x.fillStyle="#f3efe6"; x.fillRect(0,0,640,800);
+  x.fillStyle=col.t; x.fillRect(0,0,640,800);
+  x.fillStyle=col.d; x.font="600 250px "+getComputedStyle(document.body).getPropertyValue("--serif");
+  x.textAlign="center"; x.textBaseline="middle"; x.fillText(initials(seed),320,420); c.toBlob(res,"image/jpeg",.88); }); }
+window._seedDemo=async function(){
+  const data=[["Maya Chen","coffee @ Ritual, raising seed"],["Dev Patel","SF AI meetup, wants to found"],
+    ["Lena Ortiz","dinner, angel — intro from Sam"],["Tom Walsh",""],["Priya Rao","demo day afterparty, YC W26"],["Kenji Mori","robotics, hiring"]];
+  let t=Date.now();
+  for(let i=0;i<data.length;i++){ const [name,cap]=data[i]; const id=await resolvePerson(name);
+    const p=personById(id); if(i===0){ p.followUp=true; await dbPut("people",p); }
+    const reps=i<2?2:1;
+    for(let r=0;r<reps;r++){ t-=((i+r)%6+1)*7*3600*1000;
+      await dbPut("meetings",{id:uid(),createdAt:t,photo:await monoBlob(name+r),caption:r===0?cap:"",personIds:[id]}); } }
+  await loadAll(); renderAll(); toast("Demo data loaded"); console.log("seeded"); };
+
+/* ========================= boot ========================= */
+(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); }
+  catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
+</script>
+</body>
+</html>
