@@ -191,7 +191,7 @@
   <header>
     <div class="brand">
       <div class="t"><span class="ld"></span>Who I Met</div>
-      <div class="sub">by HiRey · live on this device</div>
+      <div class="sub" id="hdrSub">by HiRey · live on this device</div>
     </div>
     <div class="hdr-right">
       <div class="hdr-count"><b id="hdrCount">0</b>people</div>
@@ -481,13 +481,14 @@ function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate
       <div class="nm">${esc(p.name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`; }).join("");
   el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
 }
-function renderAll(){ renderToday(); renderDiary(); renderPeople(); document.getElementById("hdrCount").textContent=state.people.length; }
+function renderAll(){ renderToday(); renderDiary(); renderPeople(); document.getElementById("hdrCount").textContent=state.people.length; updateMe(); }
 
 /* ========================= nav / capture wiring ========================= */
 function switchView(v){ document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="v-"+v));
   document.querySelectorAll(".tab[data-view]").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   window.scrollTo({top:0,behavior:"smooth"}); }
 document.querySelectorAll(".tab[data-view]").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
+const _brand=document.querySelector("header .brand"); if(_brand){ _brand.style.cursor="pointer"; _brand.title="Edit your name"; _brand.onclick=editMyName; }
 const fileCam=document.getElementById("fileCam"), fileLib=document.getElementById("fileLib");
 document.getElementById("btnCapture").onclick=()=>fileCam.click();
 document.getElementById("navCap").onclick=()=>fileCam.click();
@@ -568,19 +569,23 @@ async function saveVoiceMoment(shareAfter){
 /* ========================= invite / claim ========================= */
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
 function getMyName(){ return (localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
-function ensureMyName(){ if(localStorage.getItem("wim_my_name")) return;
+function updateMe(){ const n=localStorage.getItem("wim_my_name")||""; const el=document.getElementById("hdrSub"); if(el) el.textContent=(n?n+" · ":"")+"by HiRey"; }
+function nameEditor(){ const cur=localStorage.getItem("wim_my_name")||"";
   document.getElementById("sheet").innerHTML=`
     <div class="grip"></div>
-    <h2>What&rsquo;s your name?</h2>
-    <p style="font-size:14px;color:var(--ink-soft);margin:0 0 14px">It goes on the we-met cards you send — first name is fine.</p>
-    <input type="text" id="onbName" placeholder="e.g. Walter" autocomplete="off" autocapitalize="words">
-    <div class="sheet-actions"><button class="btn btn-primary" id="onbSave" style="flex:1">Continue</button></div>`;
+    <h2>${cur?"Your name":"What&rsquo;s your name?"}</h2>
+    <p style="font-size:14px;color:var(--ink-soft);margin:0 0 14px">It goes on the we-met cards you send — first name is fine. This is <b>you</b>, not the people you meet.</p>
+    <input type="text" id="onbName" placeholder="e.g. Walter" value="${esc(cur)}" autocomplete="off" autocapitalize="words">
+    <div class="sheet-actions">${cur?`<button class="btn btn-ghost" id="onbCancel">Cancel</button>`:""}<button class="btn btn-primary" id="onbSave" style="flex:1">${cur?"Save":"Continue"}</button></div>`;
   showSheet("sheet","scrim");
-  const save=()=>{ const v=document.getElementById("onbName").value.trim(); if(!v) return; localStorage.setItem("wim_my_name",v); hideSheet("sheet","scrim"); };
+  const save=()=>{ const v=document.getElementById("onbName").value.trim(); if(!v) return; localStorage.setItem("wim_my_name",v); hideSheet("sheet","scrim"); updateMe(); };
   document.getElementById("onbSave").onclick=save;
+  const cc=document.getElementById("onbCancel"); if(cc) cc.onclick=()=>hideSheet("sheet","scrim");
   document.getElementById("onbName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); save(); }});
-  setTimeout(()=>{ const el=document.getElementById("onbName"); if(el) el.focus(); },320);
+  setTimeout(()=>{ const el=document.getElementById("onbName"); if(el){ el.focus(); el.select(); } },320);
 }
+function ensureMyName(){ if(localStorage.getItem("wim_my_name")) return; nameEditor(); }
+function editMyName(){ nameEditor(); }
 async function invitePerson(pid){ const p=personById(pid); if(!p) return;
   const me=getMyName(), first=p.name.split(" ")[0];
   const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name);
