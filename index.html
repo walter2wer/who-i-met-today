@@ -171,6 +171,11 @@
   .suggest .s{background:var(--card);border:.5px solid var(--line);color:var(--ink-soft);font-size:13.5px;font-weight:500;
     padding:7px 14px;cursor:pointer;border-radius:999px;box-shadow:var(--shadow-sm)}
   .suggest .s:hover{color:var(--ink)}
+  .suggest .s.hi{display:inline-flex;align-items:center;gap:7px;border-color:rgba(36,103,232,.28);color:var(--ink)}
+  .suggest .s.hi .s-tag{font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--blue);background:rgba(36,103,232,.12);padding:2px 6px;border-radius:999px}
+  .suggest .s-load{align-self:center;font-size:11.5px;color:var(--ink-faint);font-weight:500;padding:7px 4px;display:inline-flex;align-items:center;gap:6px}
+  .suggest .s-load::before{content:"";width:9px;height:9px;border-radius:50%;border:1.5px solid var(--line-2);border-top-color:var(--blue);animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .sheet-actions{display:flex;gap:10px;margin-top:20px}
   .sheet-actions .btn{flex:1}
   .hidden{display:none!important}
@@ -410,22 +415,74 @@ function downscale(file,max=1400,q=.85){ return new Promise(res=>{ const img=new
     c.toBlob(b=>res(b||file),"image/jpeg",q); };
   img.onerror=()=>res(file); img.src=URL.createObjectURL(file); }); }
 
+/* ========================= live name search (on-device + Hi DB) ========================= */
+/* Performance: instant on-device matches render first; the Hi full-DB search is
+   debounced (220ms), stale responses are dropped (seq), and every query is cached.
+   Only fires when signed in and q>=2. Falls back to adding the raw string on Enter. */
+const _nameSearch={ seq:0, t:null, cache:new Map(), results:[], q:"", byName:new Map() };
+function liveNameSearch(q, cb){
+  q=(q||"").trim(); const key=norm(q);
+  if(!HI.authed()||key.length<2){ _nameSearch.q=q; _nameSearch.results=[]; cb&&cb(); return; }
+  if(_nameSearch.cache.has(key)){ _nameSearch.q=q; _nameSearch.results=_nameSearch.cache.get(key); cb&&cb(); return; }
+  const seq=++_nameSearch.seq; clearTimeout(_nameSearch.t);
+  _nameSearch.t=setTimeout(async()=>{
+    try{
+      const r=await HI.call("hi.owners",{action:"search",q,typeahead:true,limit:8});
+      const people=(r.people||[]).filter(p=>p&&p.display_name).map(p=>({
+        display_name:p.display_name, headline:p.headline||"",
+        customer_id:p.owner_customer_id||p.customer_id||null, owner_public_url:p.owner_public_url||null, avatar_url:p.avatar_url||null }));
+      _nameSearch.cache.set(key,people);
+      if(seq===_nameSearch.seq){ _nameSearch.q=q; _nameSearch.results=people; cb&&cb(); }
+    }catch(_){ if(seq===_nameSearch.seq){ _nameSearch.q=q; _nameSearch.results=[]; cb&&cb(); } }
+  },220);
+}
+// Render suggestion chips into suggestEl: on-device matches (extraNames + diary), then Hi DB matches.
+function buildNameSuggest(suggestEl, q, addFn, extraNames){
+  if(!suggestEl) return;
+  q=(q||"").trim(); const qn=norm(q); const added=new Set(pending.names.map(norm));
+  const recent=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)).map(p=>p.name);
+  let pool=[...(extraNames||[]), ...recent]; const seen=new Set();
+  pool=pool.filter(n=>{ const k=norm(n); if(!k||seen.has(k)||added.has(k)) return false; seen.add(k); return true; });
+  if(qn) pool=pool.filter(n=>norm(n).includes(qn));
+  const local=pool.slice(0,6); const localSet=new Set(local.map(norm));
+  const hi=(HI.authed()&&qn.length>=2&&norm(_nameSearch.q)===qn)?_nameSearch.results:[];
+  const hiList=hi.filter(p=>p.display_name&&!added.has(norm(p.display_name))&&!localSet.has(norm(p.display_name))).slice(0,6);
+  hiList.forEach(p=>_nameSearch.byName.set(norm(p.display_name),p));
+  const loading=HI.authed()&&qn.length>=2&&norm(_nameSearch.q)!==qn;
+  suggestEl.innerHTML=
+    local.map(n=>`<button class="s" data-add="${esc(n)}">+ ${esc(n)}</button>`).join("")
+    + hiList.map(p=>`<button class="s hi" data-add="${esc(p.display_name)}" title="${esc(p.headline||'on HiRey')}">${esc(p.display_name)}<span class="s-tag">HiRey</span></button>`).join("")
+    + (loading?`<span class="s-load">searching HiRey…</span>`:"");
+  suggestEl.querySelectorAll(".s").forEach(b=>b.onclick=()=>{
+    const nm=b.dataset.add, hd=b.classList.contains("hi")?_nameSearch.byName.get(norm(nm)):null; addFn(nm,hd); });
+}
+// Wire a name input to the live suggestions: instant local render + debounced Hi search.
+function wireNameInput(queryEl, suggestEl, addFn, extraFn){
+  if(!queryEl) return;
+  const render=()=>buildNameSuggest(suggestEl, queryEl.value, addFn, extraFn?extraFn():[]);
+  queryEl.addEventListener("input",()=>{ render(); liveNameSearch(queryEl.value, render); });
+  render();
+}
+async function applyPendingHiLinks(){
+  if(!pending.hi) return;
+  for(const k of Object.keys(pending.hi)){ const hi=pending.hi[k];
+    const p=state.people.find(x=>x.nameLower===k); if(p&&!p.hiOwner){ p.hiOwner=hi; await dbPut("people",p); } }
+}
+
 /* ========================= capture sheet ========================= */
 let pending={ blob:null, url:"", names:[] };
 function openCaptureSheet(blob){ pending={ blob, url:URL.createObjectURL(blob), names:[] };
   renderCaptureSheet(); showSheet("sheet","scrim"); setTimeout(()=>document.getElementById("nameInput")?.focus(),340); }
 function renderCaptureSheet(){
-  const recent=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id))
-    .map(p=>p.name).filter(n=>!pending.names.some(x=>norm(x)===norm(n))).slice(0,6);
   document.getElementById("sheet").innerHTML=`
     <div class="grip"></div>
     <h2>Who did you meet?</h2>
     <div class="preview-wrap"><img src="${pending.url}" alt=""></div>
-    <input type="text" id="nameInput" placeholder="Type a name, then Enter" autocomplete="off" autocapitalize="words">
+    <input type="text" id="nameInput" placeholder="${HI.authed()?"Type a name — search HiRey, or Enter to add":"Type a name, then Enter"}" autocomplete="off" autocapitalize="words">
     ${SR?`<button class="btn-mic" id="nameMic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micLbl">Or just talk — their name + anything about them</span></button>`:""}
     <div class="added" id="added">${pending.names.map(n=>{ const c=pcolor(n);
       return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("")}</div>
-    ${recent.length?`<div class="suggest">${recent.map(n=>`<button class="s" data-s="${esc(n)}">${esc(n)}</button>`).join("")}</div>`:""}
+    <div class="suggest" id="nameSuggest"></div>
     <div class="field-label" style="margin-top:20px">Note &mdash; optional</div>
     <input type="text" id="capNote" placeholder="coffee @ Ritual, talked about the seed round" autocomplete="off">
     <div class="sheet-actions">
@@ -434,13 +491,14 @@ function renderCaptureSheet(){
     </div>`;
   const input=document.getElementById("nameInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addName(input.value); input.value=""; }});
+  wireNameInput(input, document.getElementById("nameSuggest"), addName);
   const nMic=document.getElementById("nameMic"); if(nMic) nMic.onclick=dictateName;
   document.querySelectorAll("#added .tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderCaptureSheet(); });
-  document.querySelectorAll("#sheet .s").forEach(b=>b.onclick=()=>addName(b.dataset.s));
   document.getElementById("capSaveOnly").onclick=()=>saveMoment(false);
   document.getElementById("capSave").onclick=()=>saveMoment(true);
 }
-function addName(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
+function addName(v, hi){ const n=(v||"").trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
+  if(hi){ (pending.hi||(pending.hi={}))[norm(n)]=hi; }
   renderCaptureSheet(); document.getElementById("nameInput")?.focus(); }
 function dictateName(){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ return; }
   r2.lang=navigator.language||"en-US"; r2.interimResults=true;
@@ -462,6 +520,7 @@ async function saveMoment(shareAfter){
   const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
   const blob=pending.blob;
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
+  await applyPendingHiLinks();
   await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids });
   if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]};
   await loadAll(); renderAll(); switchView("today");
@@ -505,19 +564,20 @@ function dictatePerson(pid){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_)
   try{ r2.start(); }catch(_){ if(btn) btn.classList.remove("live"); } }
 function renderPerson(pid){ const p=personById(pid); if(!p) return;
   const ms=state.meetings.filter(m=>m.personIds.includes(pid)); const last=ms[0]?relDay(ms[0].createdAt):"—";
-  const c=hiConsentFor(p), onHi=c&&c.state==="approved";
+  const c=hiConsentFor(p), connected=!!(c&&c.state==="approved");
+  const linked=!!(p.hiOwner&&(p.hiOwner.owner_public_url||p.hiOwner.customer_id));
+  const onHi=connected||linked;
   const first=esc(p.name.split(" ")[0]);
+  const CHECK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
   const status=onHi?` · <span style="color:var(--blue);font-weight:600">on HiRey</span>`:(p.hiInvited?" · invited to HiRey":(p.invited?" · invited":""));
-  const hiBlock=HI.authed()?`
-    <div class="pd-hi">
-      <h4>Connect on HiRey</h4>
-      ${onHi?`<p><span class="hi-badge on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>on HiRey</span> ${first} is on HiRey — you're connected. They can decline anytime.</p>`
-        :(p.hiInvited?`<p><span class="hi-badge pending">invited</span> Waiting for ${first} to claim their page. Re-send below if it didn't land.</p>`
-          :`<p>Send ${first} a real, consented invite — they choose to accept or decline. Needs a way to reach them.</p>`)}
-      ${onHi?"":`
-        <input type="text" id="hiContact" placeholder="their email or phone" value="${esc(p.contact||p.email||p.phone||"")}" inputmode="email" autocomplete="off">
-        <button class="btn btn-primary" id="hiSend" style="width:100%">${p.hiInvited?"Re-send HiRey invite":"Send HiRey invite"}</button>`}
-    </div>`:"";
+  const hiBody=linked
+    ? `<p><span class="hi-badge on">${CHECK}on HiRey</span> ${first}${p.hiOwner.headline?` · ${esc(p.hiOwner.headline)}`:""} — linked to their HiRey profile.</p>${p.hiOwner.owner_public_url?`<a class="btn btn-ghost" href="${esc(p.hiOwner.owner_public_url)}" target="_blank" rel="noopener" style="width:100%;text-decoration:none;margin-top:2px">View their HiRey page &rarr;</a>`:""}`
+    : connected
+    ? `<p><span class="hi-badge on">${CHECK}on HiRey</span> ${first} is on HiRey — you're connected. They can decline anytime.</p>`
+    : `${p.hiInvited?`<p><span class="hi-badge pending">invited</span> Waiting for ${first} to claim their page. Re-send below if it didn't land.</p>`:`<p>Send ${first} a real, consented invite — they choose to accept or decline. Needs a way to reach them.</p>`}
+       <input type="text" id="hiContact" placeholder="their email or phone" value="${esc(p.contact||p.email||p.phone||"")}" inputmode="email" autocomplete="off">
+       <button class="btn btn-primary" id="hiSend" style="width:100%">${p.hiInvited?"Re-send HiRey invite":"Send HiRey invite"}</button>`;
+  const hiBlock=HI.authed()?`<div class="pd-hi"><h4>Connect on HiRey</h4>${hiBody}</div>`:"";
   document.getElementById("sheet2").innerHTML=`
     <div class="grip"></div>
     <div class="pd-head">${avaHTML(p)}
@@ -624,7 +684,7 @@ function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate
   el.className="pgrid";
   const sorted=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)||b.createdAt-a.createdAt);
   el.innerHTML=sorted.map((p,i)=>{ const ct=meetCount(p.id); const c=hiConsentFor(p);
-    const dot=(c&&c.state==="approved")?'<span class="dot hi"></span>':(p.invited||p.hiInvited)?'<span class="dot inv"></span>':(isDue(p)?'<span class="dot"></span>':"");
+    const dot=((c&&c.state==="approved")||p.hiOwner)?'<span class="dot hi"></span>':(p.invited||p.hiInvited)?'<span class="dot inv"></span>':((isDue(p)||p.followUp)?'<span class="dot"></span>':"");
     return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${dot}</div>
       <div class="nm">${esc(p.name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`; }).join("");
   el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
@@ -666,7 +726,7 @@ function renderVoiceSheet(){
     </div>
     <textarea id="voiceText" placeholder="Met Maya Chen at Ritual — she's raising a seed round. Ran into Dev Patel too." style="min-height:92px"></textarea>
     <div class="field-label" style="margin-top:18px">People</div>
-    <input type="text" id="nameInput" placeholder="Add a name, then Enter" autocomplete="off" autocapitalize="words">
+    <input type="text" id="nameInput" placeholder="${HI.authed()?"Add a name — search HiRey, or Enter":"Add a name, then Enter"}" autocomplete="off" autocapitalize="words">
     <div class="added" id="added"></div>
     <div class="suggest" id="voiceSuggest"></div>
     <div class="sheet-actions">
@@ -676,6 +736,7 @@ function renderVoiceSheet(){
   document.getElementById("voiceText").addEventListener("input",renderVChips);
   const input=document.getElementById("nameInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addNameV(input.value); input.value=""; }});
+  input.addEventListener("input",()=>{ refreshVoiceSuggest(); liveNameSearch(input.value, refreshVoiceSuggest); });
   if(SR) document.getElementById("micBtn").onclick=toggleRec;
   document.getElementById("capSaveOnly").onclick=()=>saveVoiceMoment(false);
   document.getElementById("capSave").onclick=()=>saveVoiceMoment(true);
@@ -685,14 +746,17 @@ function renderVChips(){ const added=document.getElementById("added"); if(!added
   added.innerHTML=pending.names.map(n=>{ const c=pcolor(n);
     return `<span class="tag" data-n="${esc(n)}" style="background:${c.t};color:${c.d}">${esc(n)} <span class="x">&times;</span></span>`; }).join("");
   added.querySelectorAll(".tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderVChips(); });
-  const text=document.getElementById("voiceText")?.value||""; const det=detectNames(text);
-  const recent=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)).map(p=>p.name)
-    .filter(n=>!pending.names.some(x=>norm(x)===norm(n))&&!det.some(x=>norm(x)===norm(n)));
-  const sEl=document.getElementById("voiceSuggest"); const sugg=[...det,...recent].slice(0,8);
-  sEl.innerHTML=sugg.map(n=>`<button class="s" data-s="${esc(n)}">+ ${esc(n)}</button>`).join("");
-  sEl.querySelectorAll(".s").forEach(b=>b.onclick=()=>addNameV(b.dataset.s));
+  refreshVoiceSuggest();
 }
-function addNameV(v){ const n=v.trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n); renderVChips(); document.getElementById("nameInput")?.focus(); }
+function refreshVoiceSuggest(){
+  const q=document.getElementById("nameInput")?.value||"";
+  const det=detectNames(document.getElementById("voiceText")?.value||"");
+  buildNameSuggest(document.getElementById("voiceSuggest"), q, addNameV, det);
+}
+function addNameV(v, hi){ const n=(v||"").trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
+  if(hi){ (pending.hi||(pending.hi={}))[norm(n)]=hi; }
+  const q=document.getElementById("nameInput"); if(q) q.value="";
+  renderVChips(); if(q) q.focus(); }
 function toggleRec(){ listening?stopRec():startRec(); }
 function startRec(){ if(!SR) return; try{ rec=new SR(); }catch(e){ toast("Voice not available here"); return; }
   rec.lang=navigator.language||"en-US"; rec.interimResults=true; rec.continuous=true;
@@ -709,6 +773,7 @@ async function saveVoiceMoment(shareAfter){
   const stray=document.getElementById("nameInput").value.trim(); if(stray) addNameV(stray);
   if(!pending.names.length&&!note){ toast("Say or type something first"); return; }
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
+  await applyPendingHiLinks();
   await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:null, caption:note, personIds:ids });
   stopRec(); pending={blob:null,url:"",names:[]};
   await loadAll(); renderAll(); switchView("today");
