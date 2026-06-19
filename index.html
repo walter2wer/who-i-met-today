@@ -940,6 +940,13 @@ function hiProfileEditor(){
     <input type="text" id="hpHead" placeholder="e.g. Founder, HiRey · SF" value="${esc(p.headline||"")}">
     <div class="field-label" style="margin-top:14px">About &mdash; optional</div>
     <textarea id="hpBio" placeholder="A line or two about you">${esc(p.bio_markdown||"")}</textarea>
+    <div class="field-label" style="margin-top:18px;font-weight:600;color:var(--ink)">Your links &mdash; people &amp; their agents find you here</div>
+    <div class="field-label" style="margin-top:10px">X / Twitter</div>
+    <input type="text" id="hpX" placeholder="@yourhandle" value="${esc(p.twitter_handle?("@"+p.twitter_handle):"")}" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="field-label" style="margin-top:12px">Website</div>
+    <input type="text" id="hpSite" placeholder="yoursite.com" value="${esc(p.website_url||"")}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="field-label" style="margin-top:12px">LinkedIn</div>
+    <input type="text" id="hpLi" placeholder="linkedin.com/in/you" value="${esc(p.linkedin_url||"")}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
     <div class="sheet-actions"><button class="btn btn-ghost" id="hpBack">Back</button><button class="btn btn-primary" id="hpSave" style="flex:1">Save</button></div>`;
   showSheet("sheet","scrim");
   document.getElementById("hpBack").onclick=()=>renderAccount();
@@ -949,11 +956,17 @@ async function hiSaveProfile(){
   const name=document.getElementById("hpName").value.trim();
   const headline=document.getElementById("hpHead").value.trim();
   const bio=document.getElementById("hpBio").value.trim();
+  const x=document.getElementById("hpX").value.trim().replace(/^@+/,"");
+  const norm=u=>{ u=(u||"").trim(); return u?(/^https?:\/\//i.test(u)?u:"https://"+u):""; };
+  const site=norm(document.getElementById("hpSite").value);
+  const li=norm(document.getElementById("hpLi").value);
   if(!name){ toast("Add your name"); return; }
   const btn=document.getElementById("hpSave"); btn.textContent="Saving…"; btn.disabled=true;
   try{
-    const r=await HI.call("hi.owners",{action:"update_profile",display_name:name,headline,bio_markdown:bio});
-    HI.profile=r.owner_profile||Object.assign({},HI.profile,{display_name:name,headline,bio_markdown:bio});
+    const payload={action:"update_profile",display_name:name,headline,bio_markdown:bio,twitter_handle:x};
+    if(site) payload.website_url=site; if(li) payload.linkedin_url=li;
+    const r=await HI.call("hi.owners",payload);
+    HI.profile=r.owner_profile||Object.assign({},HI.profile,{display_name:name,headline,bio_markdown:bio,twitter_handle:x,website_url:site,linkedin_url:li});
     const s=HI.session()||{}; s.display_name=name; HI.save(s);
     renderAll(); updateMe(); renderAccount(); toast("Profile saved");
   }catch(e){ btn.textContent="Save"; btn.disabled=false; toast(e.status===401?"Session expired — sign in again":"Could not save profile"); }
