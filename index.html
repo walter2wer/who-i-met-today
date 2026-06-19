@@ -718,6 +718,7 @@ async function saveVoiceMoment(shareAfter){
 /* ========================= invite / claim ========================= */
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
 function getMyName(){ return (HI.myName()||localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
+function myLinktree(){ return (HI.profile&&HI.profile.owner_public_url)||((HI.session()||{}).owner_public_url)||""; }
 function updateMe(){
   const n=(HI.myName()||localStorage.getItem("wim_my_name")||"").trim();
   const el=document.getElementById("hdrSub");
@@ -952,9 +953,9 @@ async function makeCardBlob(meName, theirName, photoBlob, dateTs, accent){
   x.textAlign="left";
   return new Promise(res=>c.toBlob(res,"image/jpeg",.92));
 }
-async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getMyName();
-  const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name);
-  const text="Great meeting you, "+first+"! Here's our card. Claim your HiRey page to keep it: "+url;
+async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getMyName(), myUrl=myLinktree();
+  const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name)+(myUrl?"&me="+encodeURIComponent(myUrl):"");
+  const text="Great meeting you, "+first+"! Here's our card — claim your own HiRey page (people and their agents find you there) and connect back: "+url;
   let sent=false;
   try{ const file=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
     if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:"HiRey"}); sent=true; }
@@ -966,7 +967,7 @@ async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getM
   return sent;
 }
 async function shareCardPublic(cardBlob, p){ const first=p.name.split(" ")[0];
-  const text="Met "+p.name+" today 🤝  ·  via HiRey — hirey.ai";
+  const myUrl=myLinktree(); const text="Met "+p.name+" today 🤝  ·  I'm on HiRey → "+(myUrl||"hirey.ai");
   let sent=false;
   try{ const file=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
     if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:"Who I Met"}); sent=true; }

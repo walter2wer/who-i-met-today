@@ -53,16 +53,22 @@
 <script>
   (function(){
     var q=new URLSearchParams(location.search);
-    var from=(q.get("from")||"").trim();
-    var name=(q.get("name")||"").trim();
+    var from=(q.get("from")||"").replace(/[<>&]/g,"").trim();
+    var name=(q.get("name")||"").replace(/[<>&]/g,"").trim();
+    var meUrl=(q.get("me")||"").trim();
     var head=document.getElementById("head"), lede=document.getElementById("lede");
     if(from){ head.textContent=from+" met you."; }
-    var who=from?("<b>"+from.replace(/[<>&]/g,"")+"</b>"):"Someone";
-    var greet=name?(name.replace(/[<>&]/g,"").split(" ")[0]+", ") : "";
-    lede.innerHTML=greet+who+" added you to their circle on <b>HiRey</b> — the human network for the age of agents. Claim your page to connect back.";
+    var who=from?("<b>"+from+"</b>"):"Someone";
+    var greet=name?(name.split(" ")[0]+", ") : "";
+    lede.innerHTML=greet+who+" added you on <b>HiRey</b>. Claim your own page — it's where people <b>and their agents</b> find you, so you don't have to point them to LinkedIn. You connect back to "+(from||"them")+".";
+    if(/^https?:\/\//.test(meUrl)){
+      var fl=document.createElement("a"); fl.href=meUrl; fl.target="_blank"; fl.rel="noopener";
+      fl.style.cssText="display:block;margin-top:16px;color:#2467e8;font-weight:600;font-size:14px;text-decoration:none";
+      fl.textContent="Find "+(from||"them")+" →";
+      var card=document.querySelector(".card"); if(card) card.appendChild(fl);
+    }
     var ua=navigator.userAgent||"";
-    var fullName=name.replace(/[<>&]/g,"").trim();
-    var smsBody="hi"+(fullName?(", I'm "+fullName):"");
+    var smsBody="hi"+(name?(", I'm "+name):"");
     var sep=/android/i.test(ua)?"?":"?&";
     document.getElementById("cta").href="sms:+19169999971"+sep+"body="+encodeURIComponent(smsBody);
   })();
