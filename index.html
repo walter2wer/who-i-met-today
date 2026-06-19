@@ -429,8 +429,8 @@ function renderCaptureSheet(){
     <div class="field-label" style="margin-top:20px">Note &mdash; optional</div>
     <input type="text" id="capNote" placeholder="coffee @ Ritual, talked about the seed round" autocomplete="off">
     <div class="sheet-actions">
-      <button class="btn btn-ghost" id="capSaveOnly">Save only</button>
-      <button class="btn btn-primary" id="capSave">Save &amp; share &rarr;</button>
+      <button class="btn btn-ghost" id="capSaveOnly">Just save</button>
+      <button class="btn btn-primary" id="capSave">Send card &rarr;</button>
     </div>`;
   const input=document.getElementById("nameInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addName(input.value); input.value=""; }});
@@ -670,8 +670,8 @@ function renderVoiceSheet(){
     <div class="added" id="added"></div>
     <div class="suggest" id="voiceSuggest"></div>
     <div class="sheet-actions">
-      <button class="btn btn-ghost" id="capSaveOnly">Save only</button>
-      <button class="btn btn-primary" id="capSave">Save &amp; share &rarr;</button>
+      <button class="btn btn-ghost" id="capSaveOnly">Just save</button>
+      <button class="btn btn-primary" id="capSave">Send card &rarr;</button>
     </div>`;
   document.getElementById("voiceText").addEventListener("input",renderVChips);
   const input=document.getElementById("nameInput");
