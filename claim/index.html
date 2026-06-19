@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaf7">
 <meta name="color-scheme" content="light">
-<title>Claim your HiRey profile</title>
+<title>Claim your HiRey page</title>
 <style>
   :root{
     --ink:#161412; --ink-soft:rgba(22,20,18,.62); --ink-faint:rgba(22,20,18,.42);
-    --green:#34c759; --gold:#d18a00;
+    --green:#34c759; --gold:#d18a00; --blue:#2467e8; --purple:#7c4dff;
     --paper:#fbfaf7; --card:#fff; --line:rgba(22,20,18,.10);
     --shadow:0 18px 48px rgba(20,18,16,.16); --shadow-sm:0 8px 22px rgba(20,18,16,.10);
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
@@ -18,55 +18,138 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
   body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;
-    display:flex;align-items:center;justify-content:center;padding:28px 20px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:380px;width:100%;text-align:center}
+    padding:30px 18px 44px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:394px;width:100%;margin:0 auto;text-align:center}
   .brand{font-family:var(--serif);font-style:italic;font-weight:600;font-size:19px;letter-spacing:.01em;
     display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   .brand .ld{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.5)}50%{box-shadow:0 0 0 5px rgba(52,199,89,.05)}}
-  .card{background:var(--card);border-radius:22px;box-shadow:var(--shadow);padding:30px 26px 26px;margin-top:22px}
-  h1{font-family:var(--serif);font-weight:600;font-size:30px;line-height:1.12;letter-spacing:-.01em;margin:4px 0 14px}
-  .lede{font-size:15.5px;color:var(--ink-soft);margin:0 0 26px}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  /* ── we-met card hero ── */
+  .met{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:26px 22px 22px;margin-top:20px;
+    position:relative;overflow:hidden;animation:rise .5s ease both}
+  .met:before{content:"";position:absolute;inset:0;background:
+    radial-gradient(120% 80% at 0% 0%,rgba(209,138,0,.07),transparent 60%),
+    radial-gradient(120% 80% at 100% 100%,rgba(36,103,232,.07),transparent 60%);pointer-events:none}
+  .eyebrow{position:relative;font-size:11.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}
+  .faces{position:relative;display:flex;align-items:center;justify-content:center;gap:13px;margin:18px 0 2px}
+  .av{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);
+    font-size:31px;font-weight:600;color:#fff;background:var(--ring,#d18a00);background-size:cover;background-position:center;
+    box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--ring,#d18a00),var(--shadow-sm)}
+  .amp{font-family:var(--serif);font-size:25px;color:var(--ink-faint);font-style:italic}
+  .names{position:relative;font-family:var(--serif);font-size:20px;font-weight:600;margin-top:14px;letter-spacing:-.01em}
+  .when{position:relative;font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+
+  /* ── claim ── */
+  h1{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.15;letter-spacing:-.01em;margin:24px 4px 9px}
+  .lede{font-size:14.5px;color:var(--ink-soft);margin:0 8px 18px}
   .lede b{color:var(--ink);font-weight:600}
+
+  /* ── agent-readable page preview (the reward) ── */
+  .prev{position:relative;background:linear-gradient(180deg,#fff,#fcfbf8);border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow-sm);padding:17px 16px 15px;margin:0 0 12px;text-align:left;animation:rise .62s ease both}
+  .prev .tag{position:absolute;top:-11px;right:14px;background:var(--ink);color:#fff;font-size:10.5px;font-weight:700;
+    letter-spacing:.03em;padding:5px 10px;border-radius:999px;box-shadow:var(--shadow-sm)}
+  .prow{display:flex;align-items:center;gap:12px}
+  .pav{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-size:20px;
+    font-weight:600;color:#fff;background:var(--ring2,#2467e8);box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ring2,#2467e8)}
+  .pmeta b{font-family:var(--serif);font-size:17px;font-weight:600;display:block;line-height:1.2}
+  .pmeta span{font-size:12px;color:var(--ink-faint)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+  .chip{font-size:12px;color:var(--ink-soft);background:rgba(22,20,18,.05);border:1px solid var(--line);padding:5px 10px;border-radius:999px}
+  .areadable{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink-soft);line-height:1.45;
+    margin-top:13px;background:rgba(36,103,232,.05);border:1px solid rgba(36,103,232,.13);border-radius:11px;padding:9px 11px}
+  .areadable .d{flex:none;width:7px;height:7px;border-radius:50%;background:var(--blue);margin-top:5px;box-shadow:0 0 0 3px rgba(36,103,232,.12)}
+  .caption{font-size:12.5px;color:var(--ink-soft);margin:0 2px 20px}
+  .caption b{color:var(--ink);font-weight:600}
+
   .cta{display:block;background:var(--ink);color:#fff;font-family:var(--sans);font-size:16px;font-weight:600;
     text-decoration:none;padding:16px 20px;border-radius:999px;box-shadow:var(--shadow-sm);transition:transform .1s}
   .cta:active{transform:translateY(1px)}
   .sub{font-size:13px;color:var(--ink-soft);margin:13px 0 0}
   .sub .num{color:var(--ink);font-weight:600;white-space:nowrap}
-  .consent{font-size:12.5px;color:var(--ink-faint);margin:22px 0 0;line-height:1.5;border-top:.5px solid var(--line);padding-top:16px}
-  .foot{font-size:12px;color:var(--ink-faint);margin-top:20px}
+  .findme{display:none;margin-top:15px;color:var(--blue);font-weight:600;font-size:14px;text-decoration:none}
+  .consent{font-size:12.5px;color:var(--ink-faint);margin:20px 4px 0;line-height:1.5;border-top:.5px solid var(--line);padding-top:15px}
+  .foot{font-size:12px;color:var(--ink-faint);margin-top:18px}
   .foot a{color:var(--ink-soft)}
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="brand"><span class="ld"></span>HiRey</div>
-    <div class="card">
-      <h1 id="head">Someone met you.</h1>
-      <p class="lede" id="lede">You were added to a circle on <b>HiRey</b> — the human network for the age of agents. Claim your page to connect back.</p>
-      <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your profile</a>
-      <p class="sub">Texts <b>“hi”</b> to HiRey — your agent does the rest. ~30 seconds.<br>Or text <span class="num">hi</span> to <span class="num">+1 (916) 999-9971</span>.</p>
-      <p class="consent">You’re in control: you choose whether to claim, and you decide what’s public. No face recognition — you were named by the person who met you.</p>
+
+    <!-- we-met card hero: the moment, carried forward -->
+    <div class="met">
+      <div class="eyebrow">We met</div>
+      <div class="faces">
+        <div class="av" id="avA">?</div>
+        <div class="amp">&times;</div>
+        <div class="av" id="avB">?</div>
+      </div>
+      <div class="names" id="names">Someone &times; You</div>
+      <div class="when" id="when">On HiRey</div>
     </div>
+
+    <h1 id="head">Claim your page.</h1>
+    <p class="lede" id="lede">You were added on HiRey. Claim the page people reach when they look you up.</p>
+
+    <!-- the reward: a preview of their own agent-readable page -->
+    <div class="prev">
+      <div class="tag">🤖 Agent-readable</div>
+      <div class="prow">
+        <div class="pav" id="pav">?</div>
+        <div class="pmeta"><b id="pname">Your name</b><span>＋ add what you do</span></div>
+      </div>
+      <div class="chips"><span class="chip">＋ X</span><span class="chip">＋ Website</span><span class="chip">＋ Anything</span></div>
+      <div class="areadable"><span class="d"></span><span>An AI assistant reads this page directly — it can <b style="color:var(--ink);font-weight:600">find, cite, and reach you</b> here. No LinkedIn wall, no click-through.</span></div>
+    </div>
+    <p class="caption" id="cap">Yours the moment you claim. Add your links once — everyone, and every agent, finds you here.</p>
+
+    <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your page</a>
+    <p class="sub">Text <b>“hi”</b> — your agent does the rest. ~30 seconds.<br>Or text <span class="num">hi</span> to <span class="num">+1 (916) 999-9971</span>.</p>
+    <a class="findme" id="findme"></a>
+
+    <p class="consent">You’re in control: you choose whether to claim, and you decide what’s public. No face recognition — you were named by the person who met you.</p>
     <p class="foot"><a href="https://hirey.ai">hirey.ai</a> · Let your agent find your people.</p>
   </div>
 <script>
   (function(){
     var q=new URLSearchParams(location.search);
-    var from=(q.get("from")||"").replace(/[<>&]/g,"").trim();
-    var name=(q.get("name")||"").replace(/[<>&]/g,"").trim();
-    var meUrl=(q.get("me")||"").trim();
-    var head=document.getElementById("head"), lede=document.getElementById("lede");
-    if(from){ head.textContent=from+" met you."; }
-    var who=from?("<b>"+from+"</b>"):"Someone";
-    var greet=name?(name.split(" ")[0]+", ") : "";
-    lede.innerHTML=greet+who+" added you on <b>HiRey</b>. Claim your own page — it's where people <b>and their agents</b> find you, so you don't have to point them to LinkedIn. You connect back to "+(from||"them")+".";
+    function clean(s){return (s||"").replace(/[<>&]/g,"").trim();}
+    var from=clean(q.get("from")), name=clean(q.get("name"));
+    var meUrl=(q.get("me")||"").trim(), pic=(q.get("pic")||"").trim(), on=clean(q.get("on"));
+    var firstName=name?name.split(" ")[0]:"";
+
+    var palette=["#d18a00","#2467e8","#34c759","#7c4dff","#e5484d","#0d9488"];
+    function hue(s){var h=0,t=(s||"x");for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0;return palette[h%palette.length];}
+    function mono(s){var p=(s||"?").trim().split(/\s+/);return ((p[0]||"?")[0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase();}
+
+    // hero faces (sender gets photo if passed; both fall back to monogram + colored ring)
+    var avA=document.getElementById("avA"), avB=document.getElementById("avB");
+    avA.textContent=mono(from); avA.style.setProperty("--ring",hue(from||"a"));
+    if(/^https?:\/\//.test(pic)){ var im=new Image(); im.onload=function(){ avA.textContent=""; avA.style.backgroundImage="url('"+pic.replace(/['"\\]/g,"")+"')"; }; im.src=pic; }
+    avB.textContent=mono(name); avB.style.setProperty("--ring",hue(name||"b"));
+    document.getElementById("names").innerHTML=(from?from:"Someone")+" &times; "+(name?name:"You");
+    document.getElementById("when").textContent=on?("Met "+on):"A recent connection";
+
+    // claim copy
+    if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
+    document.getElementById("lede").innerHTML=(from?("<b>"+from+"</b> "):"Someone ")+"added you on HiRey. When people — or their agents — look you up, they reach a page they can actually read, not a LinkedIn wall.";
+
+    // reward preview = their future page
+    var pav=document.getElementById("pav");
+    pav.textContent=mono(name||"You"); pav.style.setProperty("--ring2",hue(name||"you"));
+    document.getElementById("pname").textContent=name||"Your name";
+
+    // see-sender link
     if(/^https?:\/\//.test(meUrl)){
-      var fl=document.createElement("a"); fl.href=meUrl; fl.target="_blank"; fl.rel="noopener";
-      fl.style.cssText="display:block;margin-top:16px;color:#2467e8;font-weight:600;font-size:14px;text-decoration:none";
-      fl.textContent="Find "+(from||"them")+" →";
-      var card=document.querySelector(".card"); if(card) card.appendChild(fl);
+      var fm=document.getElementById("findme");
+      fm.href=meUrl; fm.target="_blank"; fm.rel="noopener";
+      fm.textContent="See "+(from||"their")+"’s page →"; fm.style.display="inline-block";
     }
+
+    // sms cta carries the name
     var ua=navigator.userAgent||"";
     var smsBody="hi"+(name?(", I'm "+name):"");
     var sep=/android/i.test(ua)?"?":"?&";
