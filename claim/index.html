@@ -61,7 +61,10 @@
     var greet=name?(name.replace(/[<>&]/g,"").split(" ")[0]+", ") : "";
     lede.innerHTML=greet+who+" added you to their circle on <b>HiRey</b> — the human network for the age of agents. Claim your page to connect back.";
     var ua=navigator.userAgent||"";
-    if(/android/i.test(ua)){ document.getElementById("cta").href="sms:+19169999971?body=hi"; }
+    var fullName=name.replace(/[<>&]/g,"").trim();
+    var smsBody="hi"+(fullName?(", I'm "+fullName):"");
+    var sep=/android/i.test(ua)?"?":"?&";
+    document.getElementById("cta").href="sms:+19169999971"+sep+"body="+encodeURIComponent(smsBody);
   })();
 </script>
 </body>

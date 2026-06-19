@@ -965,6 +965,16 @@ async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getM
   if(!p.invited){ p.invited=true; await dbPut("people",p); renderAll(); }
   return sent;
 }
+async function shareCardPublic(cardBlob, p){ const first=p.name.split(" ")[0];
+  const text="Met "+p.name+" today 🤝  ·  via HiRey — hirey.ai";
+  let sent=false;
+  try{ const file=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:"Who I Met"}); sent=true; }
+    else if(navigator.share){ await navigator.share({text}); sent=true; }
+  }catch(e){ if(e&&e.name==="AbortError") return false; }
+  if(!sent){ try{ await navigator.clipboard.writeText(text); }catch(_){} const a=document.createElement("a"); a.href=URL.createObjectURL(cardBlob); a.download="we-met-"+first+".jpg"; document.body.appendChild(a); a.click(); a.remove(); toast("Card saved — post it anywhere"); }
+  return sent;
+}
 async function presentCard(pid, opt){ const p=personById(pid); if(!p) return;
   const m=state.meetings.find(x=>x.personIds.includes(pid)&&x.photo);
   let card=null, cardURL=""; try{ card=await makeCardBlob(getMyName(), p.name, m&&m.photo, (m&&m.createdAt)||Date.now(), pcolor(p.name).a); cardURL=URL.createObjectURL(card); }catch(_){}
@@ -974,10 +984,12 @@ async function presentCard(pid, opt){ const p=personById(pid); if(!p) return;
     <span class="eyebrow sec" style="margin:6px 0 12px">Your we-met card</span>
     <div class="preview-wrap" style="background:transparent;box-shadow:0 8px 22px rgba(20,18,16,.12);border-radius:14px;overflow:hidden">${cardURL?`<img src="${cardURL}" style="object-fit:contain;max-height:56vh">`:`<div class="ct" style="padding:38px;text-align:center">Couldn’t render the card — tap Share to send a link.</div>`}</div>
     <p style="font-size:14px;color:var(--ink-soft);margin:12px 0 0">Send it to ${esc(first)} — you both keep a copy.</p>
-    <div class="sheet-actions"><button class="btn btn-ghost" id="cardBack">${opt.backLabel||"Back"}</button><button class="btn btn-primary" id="cardShare">Share card</button></div>`;
+    <div class="sheet-actions"><button class="btn btn-ghost" id="cardBack">${opt.backLabel||"Back"}</button><button class="btn btn-primary" id="cardShare">Send to ${esc(first)}</button></div>
+    <button class="btn btn-ghost" id="cardPost" style="width:100%;margin-top:8px">Post to social instead</button>`;
   showSheet(opt.sheet, opt.scrim);
   document.getElementById("cardBack").onclick=()=>opt.onBack();
   document.getElementById("cardShare").onclick=async()=>{ if(!card){ opt.onBack(); return; } const ok=await shareCard(card,p); opt.onBack(); if(ok) toast("Card sent to "+first); };
+  document.getElementById("cardPost").onclick=async()=>{ if(!card){ opt.onBack(); return; } await shareCardPublic(card,p); opt.onBack(); };
 }
 function sendCard(pid){ return presentCard(pid,{sheet:"sheet2",scrim:"scrim2",backLabel:"Back",onBack:()=>renderPerson(pid)}); }
 
