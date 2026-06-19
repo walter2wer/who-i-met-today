@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaf7">
 <meta name="color-scheme" content="light">
-<title>Claim your HiRey page</title>
+<title>Find them on HiRey</title>
 <style>
   :root{
     --ink:#161412; --ink-soft:rgba(22,20,18,.62); --ink-faint:rgba(22,20,18,.42);
-    --green:#34c759; --gold:#d18a00; --blue:#2467e8; --purple:#7c4dff;
+    --green:#34c759; --gold:#d18a00; --blue:#2467e8;
     --paper:#fbfaf7; --card:#fff; --line:rgba(22,20,18,.10);
     --shadow:0 18px 48px rgba(20,18,16,.16); --shadow-sm:0 8px 22px rgba(20,18,16,.10);
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
@@ -17,139 +17,130 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;
-    padding:30px 18px 44px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:394px;width:100%;margin:0 auto;text-align:center}
-  .brand{font-family:var(--serif);font-style:italic;font-weight:600;font-size:19px;letter-spacing:.01em;
-    display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;padding:30px 18px 44px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:392px;width:100%;margin:0 auto;text-align:center}
+  .brand{font-family:var(--serif);font-style:italic;font-weight:600;font-size:18px;display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   .brand .ld{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.5)}50%{box-shadow:0 0 0 5px rgba(52,199,89,.05)}}
   @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-
-  /* ── we-met card hero ── */
-  .met{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:26px 22px 22px;margin-top:20px;
-    position:relative;overflow:hidden;animation:rise .5s ease both}
-  .met:before{content:"";position:absolute;inset:0;background:
-    radial-gradient(120% 80% at 0% 0%,rgba(209,138,0,.07),transparent 60%),
-    radial-gradient(120% 80% at 100% 100%,rgba(36,103,232,.07),transparent 60%);pointer-events:none}
-  .eyebrow{position:relative;font-size:11.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}
-  .faces{position:relative;display:flex;align-items:center;justify-content:center;gap:13px;margin:18px 0 2px}
-  .av{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);
-    font-size:31px;font-weight:600;color:#fff;background:var(--ring,#d18a00);background-size:cover;background-position:center;
-    box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--ring,#d18a00),var(--shadow-sm)}
-  .amp{font-family:var(--serif);font-size:25px;color:var(--ink-faint);font-style:italic}
-  .names{position:relative;font-family:var(--serif);font-size:20px;font-weight:600;margin-top:14px;letter-spacing:-.01em}
-  .when{position:relative;font-size:12.5px;color:var(--ink-soft);margin-top:3px}
-
-  /* ── claim ── */
-  h1{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.15;letter-spacing:-.01em;margin:24px 4px 9px}
-  .lede{font-size:14.5px;color:var(--ink-soft);margin:0 8px 18px}
-  .lede b{color:var(--ink);font-weight:600}
-
-  /* ── agent-readable page preview (the reward) ── */
-  .prev{position:relative;background:linear-gradient(180deg,#fff,#fcfbf8);border:1px solid var(--line);border-radius:18px;
-    box-shadow:var(--shadow-sm);padding:17px 16px 15px;margin:0 0 12px;text-align:left;animation:rise .62s ease both}
-  .prev .tag{position:absolute;top:-11px;right:14px;background:var(--ink);color:#fff;font-size:10.5px;font-weight:700;
-    letter-spacing:.03em;padding:5px 10px;border-radius:999px;box-shadow:var(--shadow-sm)}
-  .prow{display:flex;align-items:center;gap:12px}
-  .pav{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-size:20px;
-    font-weight:600;color:#fff;background:var(--ring2,#2467e8);box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ring2,#2467e8)}
-  .pmeta b{font-family:var(--serif);font-size:17px;font-weight:600;display:block;line-height:1.2}
-  .pmeta span{font-size:12px;color:var(--ink-faint)}
-  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
-  .chip{font-size:12px;color:var(--ink-soft);background:rgba(22,20,18,.05);border:1px solid var(--line);padding:5px 10px;border-radius:999px}
-  .areadable{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink-soft);line-height:1.45;
-    margin-top:13px;background:rgba(36,103,232,.05);border:1px solid rgba(36,103,232,.13);border-radius:11px;padding:9px 11px}
-  .areadable .d{flex:none;width:7px;height:7px;border-radius:50%;background:var(--blue);margin-top:5px;box-shadow:0 0 0 3px rgba(36,103,232,.12)}
-  .caption{font-size:12.5px;color:var(--ink-soft);margin:0 2px 20px}
-  .caption b{color:var(--ink);font-weight:600}
-
-  .cta{display:block;background:var(--ink);color:#fff;font-family:var(--sans);font-size:16px;font-weight:600;
-    text-decoration:none;padding:16px 20px;border-radius:999px;box-shadow:var(--shadow-sm);transition:transform .1s}
-  .cta:active{transform:translateY(1px)}
-  .sub{font-size:13px;color:var(--ink-soft);margin:13px 0 0}
-  .sub .num{color:var(--ink);font-weight:600;white-space:nowrap}
-  .findme{display:none;margin-top:15px;color:var(--blue);font-weight:600;font-size:14px;text-decoration:none}
-  .consent{font-size:12.5px;color:var(--ink-faint);margin:20px 4px 0;line-height:1.5;border-top:.5px solid var(--line);padding-top:15px}
-  .foot{font-size:12px;color:var(--ink-faint);margin-top:18px}
+  .eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:18px 0 0}
+  .card{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:26px 20px 22px;margin-top:10px;animation:rise .5s ease both}
+  .ava{width:74px;height:74px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font-family:var(--serif);
+    font-size:29px;font-weight:600;color:#fff;background:var(--ring,#6b4ea0);background-size:cover;background-position:center;
+    box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--ring,#6b4ea0),var(--shadow-sm)}
+  h1{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.15;margin:14px 0 2px}
+  .headline{font-size:14px;color:var(--ink-soft);margin:0}
+  .links{display:flex;flex-direction:column;gap:8px;margin:18px 0 0;text-align:left}
+  .lrow{display:flex;align-items:center;gap:12px;background:#fcfbf8;border:.5px solid var(--line);border-radius:13px;
+    padding:12px 14px;text-decoration:none;color:var(--ink);transition:transform .08s}
+  .lrow:active{transform:scale(.99)}
+  .lrow .lk{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(22,20,18,.06);color:var(--ink-soft)}
+  .lrow .lk svg{width:17px;height:17px;display:block}
+  .lrow .lv{flex:1;min-width:0;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lrow .la{flex:none;color:var(--ink-faint)}
+  .save{display:flex;align-items:center;justify-content:center;gap:9px;background:var(--ink);color:#fff;font-family:var(--sans);
+    font-size:15.5px;font-weight:600;text-decoration:none;border:none;width:100%;padding:15px;border-radius:999px;margin-top:16px;
+    box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .1s}
+  .save:active{transform:translateY(1px)}
+  .save svg{width:18px;height:18px}
+  .claim{margin-top:22px;padding-top:18px;border-top:.5px solid var(--line)}
+  .claim p{font-size:13.5px;color:var(--ink-soft);margin:0 0 12px}
+  .claim b{color:var(--ink)}
+  .cta{display:inline-flex;align-items:center;gap:7px;background:transparent;color:var(--blue);font-size:14.5px;font-weight:600;
+    text-decoration:none;padding:11px 20px;border:1.5px solid rgba(36,103,232,.3);border-radius:999px}
+  .consent{font-size:12px;color:var(--ink-faint);margin:20px 6px 0;line-height:1.5}
+  .foot{font-size:12px;color:var(--ink-faint);margin-top:16px}
   .foot a{color:var(--ink-soft)}
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="brand"><span class="ld"></span>HiRey</div>
+    <div class="eyebrow" id="eyebrow">You met</div>
+    <div class="card">
+      <div class="ava" id="ava">?</div>
+      <h1 id="name">Someone</h1>
+      <p class="headline" id="headline"></p>
+      <div class="links" id="links"></div>
+      <button class="save" id="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Save to contacts</button>
 
-    <!-- we-met card hero: the moment, carried forward -->
-    <div class="met">
-      <div class="eyebrow">We met</div>
-      <div class="faces">
-        <div class="av" id="avA">?</div>
-        <div class="amp">&times;</div>
-        <div class="av" id="avB">?</div>
+      <div class="claim">
+        <p id="claimLede">Want a card like this?</p>
+        <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your own &rarr;</a>
       </div>
-      <div class="names" id="names">Someone &times; You</div>
-      <div class="when" id="when">On HiRey</div>
+      <p class="consent">No face recognition — you were named by the person who met you. You decide what’s public.</p>
     </div>
-
-    <h1 id="head">Claim your page.</h1>
-    <p class="lede" id="lede">You were added on HiRey. Claim the page people reach when they look you up.</p>
-
-    <!-- the reward: a preview of their own agent-readable page -->
-    <div class="prev">
-      <div class="tag">🤖 Agent-readable</div>
-      <div class="prow">
-        <div class="pav" id="pav">?</div>
-        <div class="pmeta"><b id="pname">Your name</b><span>＋ add what you do</span></div>
-      </div>
-      <div class="chips"><span class="chip">＋ X</span><span class="chip">＋ Website</span><span class="chip">＋ Anything</span></div>
-      <div class="areadable"><span class="d"></span><span>An AI assistant reads this page directly — it can <b style="color:var(--ink);font-weight:600">find, cite, and reach you</b> here. No LinkedIn wall, no click-through.</span></div>
-    </div>
-    <p class="caption" id="cap">Yours the moment you claim. Add your links once — everyone, and every agent, finds you here.</p>
-
-    <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your page</a>
-    <p class="sub">Text <b>“hi”</b> — your agent does the rest. ~30 seconds.<br>Or text <span class="num">hi</span> to <span class="num">+1 (916) 999-9971</span>.</p>
-    <a class="findme" id="findme"></a>
-
-    <p class="consent">You’re in control: you choose whether to claim, and you decide what’s public. No face recognition — you were named by the person who met you.</p>
     <p class="foot"><a href="https://hirey.ai">hirey.ai</a> · Let your agent find your people.</p>
   </div>
 <script>
   (function(){
     var q=new URLSearchParams(location.search);
-    function clean(s){return (s||"").replace(/[<>&]/g,"").trim();}
-    var from=clean(q.get("from")), name=clean(q.get("name"));
-    var meUrl=(q.get("me")||"").trim(), pic=(q.get("pic")||"").trim(), on=clean(q.get("on"));
-    var firstName=name?name.split(" ")[0]:"";
+    function g(k){ return (q.get(k)||"").trim(); }
+    function clean(s){ return s.replace(/[<>]/g,"").trim(); }
+    var from=clean(g("from")), name=clean(g("name")), on=clean(g("on"));
+    var hl=clean(g("hl")), ph=g("ph"), em=g("em"), x=g("x").replace(/^@+/,""), w=g("w"), li=g("li"), me=g("me"), pic=g("pic");
+    var firstFrom=from?from.split(" ")[0]:"", firstName=name?name.split(" ")[0]:"";
 
-    var palette=["#d18a00","#2467e8","#34c759","#7c4dff","#e5484d","#0d9488"];
-    function hue(s){var h=0,t=(s||"x");for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0;return palette[h%palette.length];}
-    function mono(s){var p=(s||"?").trim().split(/\s+/);return ((p[0]||"?")[0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase();}
+    var palette=["#6b4ea0","#2467e8","#0d9488","#d18a00","#c0504d","#7c4dff"];
+    function hue(s){ var h=0,t=s||"x"; for(var i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))>>>0; return palette[h%palette.length]; }
+    function mono(s){ var p=(s||"?").trim().split(/\s+/); return ((p[0]||"?")[0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase(); }
 
-    // hero faces (sender gets photo if passed; both fall back to monogram + colored ring)
-    var avA=document.getElementById("avA"), avB=document.getElementById("avB");
-    avA.textContent=mono(from); avA.style.setProperty("--ring",hue(from||"a"));
-    if(/^https?:\/\//.test(pic)){ var im=new Image(); im.onload=function(){ avA.textContent=""; avA.style.backgroundImage="url('"+pic.replace(/['"\\]/g,"")+"')"; }; im.src=pic; }
-    avB.textContent=mono(name); avB.style.setProperty("--ring",hue(name||"b"));
-    document.getElementById("names").innerHTML=(from?from:"Someone")+" &times; "+(name?name:"You");
-    document.getElementById("when").textContent=on?("Met "+on):"A recent connection";
+    if(from){ document.getElementById("eyebrow").textContent="You met"; document.getElementById("name").textContent=from; }
+    document.getElementById("headline").textContent=hl||(on?("Met "+on):"");
+    var ava=document.getElementById("ava");
+    ava.textContent=mono(from); ava.style.setProperty("--ring",hue(from));
+    if(/^https?:\/\//.test(pic)){ var im=new Image(); im.onload=function(){ ava.textContent=""; ava.style.backgroundImage="url('"+pic.replace(/['"\\]/g,"")+"')"; }; im.src=pic; }
 
-    // claim copy
-    if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
-    document.getElementById("lede").innerHTML=(from?("<b>"+from+"</b> "):"Someone ")+"added you on HiRey. When people — or their agents — look you up, they reach a page they can actually read, not a LinkedIn wall.";
+    var IC={
+      x:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7 8 8.2 12h-6.4l-5-7.3L5.7 22H2.5l7.5-8.6L2 2h6.5l4.6 6.7L18.9 2zm-1.1 18h1.7L7.3 3.8H5.5L17.8 20z"/></svg>',
+      w:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+      li:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2.05 3.77-2.05 4 0 4.75 2.6 4.75 6V21H20v-5.3c0-1.26-.02-2.9-1.76-2.9-1.77 0-2.04 1.38-2.04 2.8V21H9z"/></svg>',
+      ph:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>',
+      em:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 6l9 7 9-7"/></svg>'
+    };
+    var rows=[];
+    if(x)  rows.push({k:IC.x, v:"@"+x, href:"https://x.com/"+encodeURIComponent(x)});
+    if(w)  rows.push({k:IC.w, v:w.replace(/^https?:\/\//,"").replace(/\/$/,""), href:w});
+    if(li) rows.push({k:IC.li, v:li.replace(/^https?:\/\/(www\.)?/,"").replace(/\/$/,""), href:li});
+    if(ph) rows.push({k:IC.ph, v:ph, href:"tel:"+ph.replace(/[^\d+]/g,"")});
+    if(em) rows.push({k:IC.em, v:em, href:"mailto:"+em});
+    if(me) rows.push({k:IC.w, v:"HiRey page", href:me});
+    var L=document.getElementById("links");
+    if(rows.length){
+      L.innerHTML=rows.map(function(r){
+        var ext=/^https?:/.test(r.href);
+        return '<a class="lrow" href="'+r.href.replace(/"/g,"&quot;")+'"'+(ext?' target="_blank" rel="noopener"':'')+'><span class="lk">'+r.k+'</span><span class="lv">'+r.v.replace(/[<>&]/g,"")+'</span><span class="la">&rsaquo;</span></a>';
+      }).join("");
+    } else { L.style.display="none"; }
 
-    // reward preview = their future page
-    var pav=document.getElementById("pav");
-    pav.textContent=mono(name||"You"); pav.style.setProperty("--ring2",hue(name||"you"));
-    document.getElementById("pname").textContent=name||"Your name";
-
-    // see-sender link
-    if(/^https?:\/\//.test(meUrl)){
-      var fm=document.getElementById("findme");
-      fm.href=meUrl; fm.target="_blank"; fm.rel="noopener";
-      fm.textContent="See "+(from||"their")+"’s page →"; fm.style.display="inline-block";
+    // vCard "save to contacts"
+    function vc(s){ return String(s).replace(/([,;\\])/g,"\\$1").replace(/\n/g,"\\n"); }
+    function vcard(){
+      var a=["BEGIN:VCARD","VERSION:3.0","FN:"+vc(from||"Contact")];
+      if(hl) a.push("TITLE:"+vc(hl));
+      if(ph) a.push("TEL;TYPE=CELL:"+vc(ph));
+      if(em) a.push("EMAIL;TYPE=INTERNET:"+vc(em));
+      if(w)  a.push("URL:"+vc(w));
+      if(x)  a.push("URL:"+vc("https://x.com/"+x));
+      if(li) a.push("URL:"+vc(li));
+      if(me) a.push("URL:"+vc(me));
+      a.push("NOTE:"+vc("Met on HiRey"+(on?(" · "+on):"")));
+      a.push("END:VCARD");
+      return a.join("\r\n");
     }
+    var saveBtn=document.getElementById("save");
+    if(!(ph||em||x||w||li||me)){ saveBtn.style.display="none"; }
+    saveBtn.onclick=function(){
+      try{
+        var blob=new Blob([vcard()],{type:"text/vcard;charset=utf-8"});
+        var a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+        a.download=(from||"contact").replace(/[^\w]+/g,"_")+".vcf";
+        document.body.appendChild(a); a.click(); setTimeout(function(){ a.remove(); },200);
+      }catch(e){}
+    };
 
-    // sms cta carries the name
+    // secondary: claim your own
+    document.getElementById("claimLede").innerHTML=(firstName?("<b>"+firstName+"</b> — "):"")+"want a card like "+(firstFrom?("<b>"+firstFrom+"</b>’s"):"this")+"?";
     var ua=navigator.userAgent||"";
     var smsBody="hi"+(name?(", I'm "+name):"");
     var sep=/android/i.test(ua)?"?":"?&";

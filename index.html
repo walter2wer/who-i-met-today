@@ -782,7 +782,9 @@ async function saveVoiceMoment(shareAfter){
 
 /* ========================= invite / claim ========================= */
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
-function getMyName(){ return (HI.myName()||localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
+function myCard(){ try{ return JSON.parse(localStorage.getItem("wim_my_card")||"{}")||{}; }catch(_){ return {}; } }
+function saveMyCard(c){ localStorage.setItem("wim_my_card",JSON.stringify(c||{})); if(c&&c.name) localStorage.setItem("wim_my_name",c.name); }
+function getMyName(){ const c=myCard(); return (c.name||HI.myName()||localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
 function myLinktree(){ return (HI.profile&&HI.profile.owner_public_url)||((HI.session()||{}).owner_public_url)||""; }
 function myAvatar(){ return (HI.profile&&(HI.profile.avatar||HI.profile.avatar_url||HI.profile.avatar_thumb_url))||""; }
 function updateMe(){
@@ -794,22 +796,52 @@ function updateMe(){
     const av=HI.profile&&HI.profile.avatar_url;
     ab.innerHTML=av?`<img src="${esc(av)}" alt="" onerror="this.parentNode.textContent='${esc(initials(n||"?"))}'">`:(n?esc(initials(n)):`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>`); }
 }
-function nameEditor(){ const cur=localStorage.getItem("wim_my_name")||"";
+function cardEditor(){ const c=myCard(), p=HI.profile||{};
+  const v={ name:c.name||HI.myName()||localStorage.getItem("wim_my_name")||"", headline:c.headline||p.headline||"",
+    phone:c.phone||"", email:c.email||"", x:(c.x||p.twitter_handle||"").replace(/^@+/,""),
+    website:c.website||p.website_url||"", linkedin:c.linkedin||p.linkedin_url||"" };
+  const first=!v.name;
   document.getElementById("sheet").innerHTML=`
     <div class="grip"></div>
-    <h2>${cur?"Your name":"What&rsquo;s your name?"}</h2>
-    <p style="font-size:14px;color:var(--ink-soft);margin:0 0 14px">It goes on the we-met cards you send — first name is fine. This is <b>you</b>, not the people you meet.</p>
-    <input type="text" id="onbName" placeholder="e.g. Walter" value="${esc(cur)}" autocomplete="off" autocapitalize="words">
-    <div class="sheet-actions">${cur?`<button class="btn btn-ghost" id="onbCancel">Cancel</button>`:""}<button class="btn btn-primary" id="onbSave" style="flex:1">${cur?"Save":"Continue"}</button></div>`;
+    <h2>${first?"Your card":"Your card"}</h2>
+    <p style="font-size:14px;color:var(--ink-soft);margin:0 0 14px">This is <b>you</b> — it rides on every we-met card you send, so the person can tap once and reach you. Fill what you want, skip the rest.</p>
+    <div class="field-label">Name</div>
+    <input type="text" id="mcName" placeholder="e.g. Walter Wu" value="${esc(v.name)}" autocomplete="off" autocapitalize="words">
+    <div class="field-label" style="margin-top:12px">Headline &mdash; optional</div>
+    <input type="text" id="mcHead" placeholder="Founder, HiRey · SF" value="${esc(v.headline)}" autocomplete="off">
+    <div class="field-label" style="margin-top:18px;font-weight:600;color:var(--ink)">Your links &amp; contacts</div>
+    <div class="field-label" style="margin-top:8px">Phone</div>
+    <input type="tel" id="mcPhone" placeholder="+1 415 555 0123" value="${esc(v.phone)}" inputmode="tel" autocomplete="off">
+    <div class="field-label" style="margin-top:10px">Email</div>
+    <input type="email" id="mcEmail" placeholder="you@example.com" value="${esc(v.email)}" inputmode="email" autocapitalize="none" autocomplete="off">
+    <div class="field-label" style="margin-top:10px">X / Twitter</div>
+    <input type="text" id="mcX" placeholder="@yourhandle" value="${esc(v.x?("@"+v.x):"")}" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="field-label" style="margin-top:10px">Website</div>
+    <input type="text" id="mcSite" placeholder="yoursite.com" value="${esc(v.website)}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="field-label" style="margin-top:10px">LinkedIn</div>
+    <input type="text" id="mcLi" placeholder="linkedin.com/in/you" value="${esc(v.linkedin)}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="sheet-actions">${first?"":`<button class="btn btn-ghost" id="mcCancel">Cancel</button>`}<button class="btn btn-primary" id="mcSave" style="flex:1">${first?"Continue":"Save"}</button></div>`;
   showSheet("sheet","scrim");
-  const save=()=>{ const v=document.getElementById("onbName").value.trim(); if(!v) return; localStorage.setItem("wim_my_name",v); hideSheet("sheet","scrim"); updateMe(); };
-  document.getElementById("onbSave").onclick=save;
-  const cc=document.getElementById("onbCancel"); if(cc) cc.onclick=()=>hideSheet("sheet","scrim");
-  document.getElementById("onbName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); save(); }});
-  setTimeout(()=>{ const el=document.getElementById("onbName"); if(el){ el.focus(); el.select(); } },320);
+  const norm=u=>{ u=(u||"").trim(); return u?(/^https?:\/\//i.test(u)?u:"https://"+u):""; };
+  const save=async()=>{
+    const name=document.getElementById("mcName").value.trim(); if(!name){ toast("Add your name"); return; }
+    const x=document.getElementById("mcX").value.trim().replace(/^@+/,"");
+    const card={ name, headline:document.getElementById("mcHead").value.trim(), phone:document.getElementById("mcPhone").value.trim(),
+      email:document.getElementById("mcEmail").value.trim(), x, website:norm(document.getElementById("mcSite").value), linkedin:norm(document.getElementById("mcLi").value) };
+    saveMyCard(card); hideSheet("sheet","scrim"); updateMe(); renderAll(); toast("Your card is set");
+    if(HI.authed()){ try{ const payload={action:"update_profile",display_name:name,headline:card.headline,twitter_handle:x};
+      if(card.website) payload.website_url=card.website; if(card.linkedin) payload.linkedin_url=card.linkedin;
+      const r=await HI.call("hi.owners",payload);
+      HI.profile=r.owner_profile||Object.assign({},HI.profile,{display_name:name,headline:card.headline,twitter_handle:x,website_url:card.website,linkedin_url:card.linkedin}); updateMe(); }catch(_){} }
+  };
+  document.getElementById("mcSave").onclick=save;
+  const cc=document.getElementById("mcCancel"); if(cc) cc.onclick=()=>hideSheet("sheet","scrim");
+  document.getElementById("mcName").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!document.getElementById("mcHead").value){ e.preventDefault(); document.getElementById("mcHead").focus(); }});
+  setTimeout(()=>{ const el=document.getElementById("mcName"); if(el){ el.focus(); if(first) el.select(); } },320);
 }
-function ensureMyName(){ if(localStorage.getItem("wim_my_name")||HI.authed()) return; nameEditor(); }
-function editMyName(){ nameEditor(); }
+function nameEditor(){ cardEditor(); }
+function ensureMyName(){ if(myCard().name||localStorage.getItem("wim_my_name")||HI.authed()) return; cardEditor(); }
+function editMyName(){ cardEditor(); }
 
 /* ========================= account / Hi sign-in ========================= */
 const CHEV=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
@@ -832,11 +864,11 @@ function renderAccount(){
         <div><div class="nm">${esc(name)}</div>
         <div class="ct">${p.headline?esc(p.headline)+" · ":""}<span class="v">signed in</span>${onHi?` · ${onHi} on HiRey`:""}</div></div>
       </div>
-      <button class="row-link" id="acctEdit"><span>Edit my HiRey profile<span class="sub">Name, headline, bio — shown on your cards</span></span>${CHEV}</button>
+      <button class="row-link" id="acctEdit"><span>Edit my card<span class="sub">Name, headline, links &amp; contacts — on every card you send</span></span>${CHEV}</button>
       ${url?`<button class="row-link" id="acctView"><span>View my public page<span class="sub">${esc(url.replace(/^https?:\/\//,""))}</span></span>${CHEV}</button>`:""}
       <button class="row-link" id="acctOut"><span>Sign out</span>${CHEV}</button>
       <p class="consent" style="margin-top:18px">Your diary stays on this device. Signing in only syncs your profile and lets the people you invite claim a real HiRey page.</p>`;
-    document.getElementById("acctEdit").onclick=hiProfileEditor;
+    document.getElementById("acctEdit").onclick=cardEditor;
     const v=document.getElementById("acctView"); if(v&&url) v.onclick=()=>window.open(url,"_blank");
     document.getElementById("acctOut").onclick=()=>{ HI.clear(); hideSheet("sheet","scrim"); renderAll(); updateMe(); toast("Signed out — your diary stays here"); };
     return;
@@ -851,7 +883,7 @@ function renderAccount(){
       <button data-m="google" class="${_auth.method==="google"?"on":""}">Google</button>
     </div>
     <div id="authArea"></div>
-    <p class="sub" style="font-size:12.5px;color:var(--ink-faint);text-align:center;margin:16px 0 0">Just want a name on your cards? <a id="authLocal" style="color:var(--ink-soft);cursor:pointer;text-decoration:underline">Set a local name</a></p>`;
+    <p class="sub" style="font-size:12.5px;color:var(--ink-faint);text-align:center;margin:16px 0 0">Don&rsquo;t want to sign in yet? <a id="authLocal" style="color:var(--ink-soft);cursor:pointer;text-decoration:underline">Just set up my card</a></p>`;
   document.querySelectorAll("#authSeg button").forEach(b=>b.onclick=()=>{ _auth={method:b.dataset.m,stage:"enter",flowId:null,value:"",busy:false}; renderAccount(); });
   document.getElementById("authLocal").onclick=()=>nameEditor();
   renderAuthArea();
@@ -926,7 +958,7 @@ async function finishAuth(tok){
   await hiSyncProfile(); await hiRefreshConsent();
   hideSheet("sheet","scrim"); renderAll(); updateMe();
   const nm=HI.myName(); toast(nm?("Signed in — welcome, "+nm.split(" ")[0]):"Signed in to HiRey");
-  if(!HI.myName()) hiProfileEditor();
+  if(!myCard().name && !HI.myName()) cardEditor();
 }
 function hiProfileEditor(){
   const p=HI.profile||{};
@@ -940,6 +972,13 @@ function hiProfileEditor(){
     <input type="text" id="hpHead" placeholder="e.g. Founder, HiRey · SF" value="${esc(p.headline||"")}">
     <div class="field-label" style="margin-top:14px">About &mdash; optional</div>
     <textarea id="hpBio" placeholder="A line or two about you">${esc(p.bio_markdown||"")}</textarea>
+    <div class="field-label" style="margin-top:18px;font-weight:600;color:var(--ink)">Your links &mdash; people &amp; their agents find you here</div>
+    <div class="field-label" style="margin-top:10px">X / Twitter</div>
+    <input type="text" id="hpX" placeholder="@yourhandle" value="${esc(p.twitter_handle?("@"+p.twitter_handle):"")}" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="field-label" style="margin-top:12px">Website</div>
+    <input type="text" id="hpSite" placeholder="yoursite.com" value="${esc(p.website_url||"")}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
+    <div class="field-label" style="margin-top:12px">LinkedIn</div>
+    <input type="text" id="hpLi" placeholder="linkedin.com/in/you" value="${esc(p.linkedin_url||"")}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
     <div class="sheet-actions"><button class="btn btn-ghost" id="hpBack">Back</button><button class="btn btn-primary" id="hpSave" style="flex:1">Save</button></div>`;
   showSheet("sheet","scrim");
   document.getElementById("hpBack").onclick=()=>renderAccount();
@@ -949,11 +988,17 @@ async function hiSaveProfile(){
   const name=document.getElementById("hpName").value.trim();
   const headline=document.getElementById("hpHead").value.trim();
   const bio=document.getElementById("hpBio").value.trim();
+  const x=document.getElementById("hpX").value.trim().replace(/^@+/,"");
+  const norm=u=>{ u=(u||"").trim(); return u?(/^https?:\/\//i.test(u)?u:"https://"+u):""; };
+  const site=norm(document.getElementById("hpSite").value);
+  const li=norm(document.getElementById("hpLi").value);
   if(!name){ toast("Add your name"); return; }
   const btn=document.getElementById("hpSave"); btn.textContent="Saving…"; btn.disabled=true;
   try{
-    const r=await HI.call("hi.owners",{action:"update_profile",display_name:name,headline,bio_markdown:bio});
-    HI.profile=r.owner_profile||Object.assign({},HI.profile,{display_name:name,headline,bio_markdown:bio});
+    const payload={action:"update_profile",display_name:name,headline,bio_markdown:bio,twitter_handle:x};
+    if(site) payload.website_url=site; if(li) payload.linkedin_url=li;
+    const r=await HI.call("hi.owners",payload);
+    HI.profile=r.owner_profile||Object.assign({},HI.profile,{display_name:name,headline,bio_markdown:bio,twitter_handle:x,website_url:site,linkedin_url:li});
     const s=HI.session()||{}; s.display_name=name; HI.save(s);
     renderAll(); updateMe(); renderAccount(); toast("Profile saved");
   }catch(e){ btn.textContent="Save"; btn.disabled=false; toast(e.status===401?"Session expired — sign in again":"Could not save profile"); }
@@ -1019,10 +1064,14 @@ async function makeCardBlob(meName, theirName, photoBlob, dateTs, accent){
   x.textAlign="left";
   return new Promise(res=>c.toBlob(res,"image/jpeg",.92));
 }
-async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getMyName(), myUrl=myLinktree(), myPic=myAvatar();
+async function shareCard(cardBlob, p){ const first=p.name.split(" ")[0], me=getMyName(), myUrl=myLinktree(), myPic=myAvatar(), c=myCard();
   const on=new Date().toLocaleDateString(undefined,{month:"short",day:"numeric"});
-  const url=CLAIM_BASE+"?from="+encodeURIComponent(me)+"&name="+encodeURIComponent(p.name)+(myUrl?"&me="+encodeURIComponent(myUrl):"")+(myPic?"&pic="+encodeURIComponent(myPic):"")+"&on="+encodeURIComponent(on);
-  const text="Great meeting you, "+first+"! Here's our card — claim your own HiRey page (people and their agents find you there) and connect back: "+url;
+  const q=new URLSearchParams(); q.set("from",me); q.set("name",p.name); q.set("on",on);
+  if(myUrl) q.set("me",myUrl); if(myPic) q.set("pic",myPic);
+  if(c.headline) q.set("hl",c.headline); if(c.phone) q.set("ph",c.phone); if(c.email) q.set("em",c.email);
+  if(c.x) q.set("x",c.x); if(c.website) q.set("w",c.website); if(c.linkedin) q.set("li",c.linkedin);
+  const url=CLAIM_BASE+"?"+q.toString();
+  const text="Great meeting you, "+first+"! Here's our card — and how to reach me: "+url;
   let sent=false;
   try{ const file=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
     if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],text,title:"HiRey"}); sent=true; }
