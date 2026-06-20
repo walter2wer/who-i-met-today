@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaf7">
 <meta name="color-scheme" content="light">
-<title>Find them on HiRey</title>
+<title>Claim your HiRey page</title>
 <style>
   :root{
     --ink:#161412; --ink-soft:rgba(22,20,18,.62); --ink-faint:rgba(22,20,18,.42);
-    --green:#34c759; --gold:#d18a00; --blue:#2467e8;
+    --green:#34c759; --gold:#d18a00; --blue:#2467e8; --purple:#7c4dff;
     --paper:#fbfaf7; --card:#fff; --line:rgba(22,20,18,.10);
     --shadow:0 18px 48px rgba(20,18,16,.16); --shadow-sm:0 8px 22px rgba(20,18,16,.10);
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
@@ -17,130 +17,235 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
-  body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;padding:30px 18px 44px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:392px;width:100%;margin:0 auto;text-align:center}
-  .brand{font-family:var(--serif);font-style:italic;font-weight:600;font-size:18px;display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;
+    padding:30px 18px 44px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:394px;width:100%;margin:0 auto;text-align:center}
+  .brand{font-family:var(--serif);font-style:italic;font-weight:600;font-size:19px;letter-spacing:.01em;
+    display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   .brand .ld{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.5)}50%{box-shadow:0 0 0 5px rgba(52,199,89,.05)}}
   @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-  .eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:18px 0 0}
-  .card{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:26px 20px 22px;margin-top:10px;animation:rise .5s ease both}
-  .ava{width:74px;height:74px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font-family:var(--serif);
-    font-size:29px;font-weight:600;color:#fff;background:var(--ring,#6b4ea0);background-size:cover;background-position:center;
-    box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--ring,#6b4ea0),var(--shadow-sm)}
-  h1{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.15;margin:14px 0 2px}
-  .headline{font-size:14px;color:var(--ink-soft);margin:0}
-  .links{display:flex;flex-direction:column;gap:8px;margin:18px 0 0;text-align:left}
-  .lrow{display:flex;align-items:center;gap:12px;background:#fcfbf8;border:.5px solid var(--line);border-radius:13px;
-    padding:12px 14px;text-decoration:none;color:var(--ink);transition:transform .08s}
-  .lrow:active{transform:scale(.99)}
-  .lrow .lk{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(22,20,18,.06);color:var(--ink-soft)}
-  .lrow .lk svg{width:17px;height:17px;display:block}
-  .lrow .lv{flex:1;min-width:0;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .lrow .la{flex:none;color:var(--ink-faint)}
-  .save{display:flex;align-items:center;justify-content:center;gap:9px;background:var(--ink);color:#fff;font-family:var(--sans);
-    font-size:15.5px;font-weight:600;text-decoration:none;border:none;width:100%;padding:15px;border-radius:999px;margin-top:16px;
-    box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .1s}
-  .save:active{transform:translateY(1px)}
-  .save svg{width:18px;height:18px}
-  .claim{margin-top:22px;padding-top:18px;border-top:.5px solid var(--line)}
-  .claim p{font-size:13.5px;color:var(--ink-soft);margin:0 0 12px}
-  .claim b{color:var(--ink)}
-  .cta{display:inline-flex;align-items:center;gap:7px;background:transparent;color:var(--blue);font-size:14.5px;font-weight:600;
-    text-decoration:none;padding:11px 20px;border:1.5px solid rgba(36,103,232,.3);border-radius:999px}
-  .consent{font-size:12px;color:var(--ink-faint);margin:20px 6px 0;line-height:1.5}
-  .foot{font-size:12px;color:var(--ink-faint);margin-top:16px}
+
+  /* ── we-met card hero: the moment, carried forward ── */
+  .met{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:26px 22px 22px;margin-top:20px;
+    position:relative;overflow:hidden;animation:rise .5s ease both}
+  .met:before{content:"";position:absolute;inset:0;background:
+    radial-gradient(120% 80% at 0% 0%,rgba(209,138,0,.07),transparent 60%),
+    radial-gradient(120% 80% at 100% 100%,rgba(36,103,232,.07),transparent 60%);pointer-events:none}
+  .eyebrow{position:relative;font-size:11.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}
+  .faces{position:relative;display:flex;align-items:center;justify-content:center;gap:13px;margin:18px 0 2px}
+  .av{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);
+    font-size:31px;font-weight:600;color:#fff;background:var(--ring,#d18a00);background-size:cover;background-position:center;
+    box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--ring,#d18a00),var(--shadow-sm)}
+  .amp{font-family:var(--serif);font-size:25px;color:var(--ink-faint);font-style:italic}
+  .names{position:relative;font-family:var(--serif);font-size:20px;font-weight:600;margin-top:14px;letter-spacing:-.01em}
+  .when{position:relative;font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+
+  /* ── who you met: the sharer, legible at a glance — no click-through to LinkedIn ── */
+  .sender{position:relative;background:var(--card);border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow-sm);padding:16px;margin:14px 0 4px;text-align:left;animation:rise .56s ease both}
+  .sender .lbl{font-size:10.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px}
+  .sender .who{display:flex;align-items:center;gap:13px}
+  .sender .sav{width:56px;height:56px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+    font-family:var(--serif);font-size:23px;font-weight:600;color:#fff;background:var(--sring,#d18a00);
+    background-size:cover;background-position:center;box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--sring,#d18a00)}
+  .sender .sname{font-family:var(--serif);font-size:19px;font-weight:600;line-height:1.15;letter-spacing:-.01em}
+  .sender .shl{font-size:13px;color:var(--ink-soft);margin-top:3px;line-height:1.4}
+  .sender .sbio{font-size:13px;color:var(--ink-soft);line-height:1.5;margin:13px 0 0}
+  .sender .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .sender .lk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink);
+    text-decoration:none;background:rgba(22,20,18,.04);border:1px solid var(--line);border-radius:999px;padding:7px 12px;transition:background .15s}
+  .sender .lk:active{background:rgba(22,20,18,.1)}
+  .sender .lk svg{width:13px;height:13px;flex:0 0 auto}
+  .sender .full{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--blue);text-decoration:none;margin-top:14px}
+  .sender .full svg{width:14px;height:14px}
+  .sender .savebtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;
+    font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);background:var(--paper);
+    border:1px solid var(--line);border-radius:13px;padding:13px 14px;cursor:pointer;transition:transform .1s,background .15s}
+  .sender .savebtn:active{transform:translateY(1px);background:rgba(22,20,18,.05)}
+  .sender .savebtn svg{width:16px;height:16px;flex:0 0 auto}
+  /* at a glance — the substance you'd otherwise open LinkedIn for, rendered right here */
+  .sender .glance{margin-top:14px;border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:12px}
+  .sender .grow{display:flex;flex-direction:column;gap:3px}
+  .sender .gk{font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+  .sender .gv{font-size:13.5px;color:var(--ink);line-height:1.45}
+
+  /* ── claim ── */
+  h1{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.15;letter-spacing:-.01em;margin:26px 4px 9px}
+  .lede{font-size:14.5px;color:var(--ink-soft);margin:0 8px 18px}
+  .lede b{color:var(--ink);font-weight:600}
+
+  /* ── agent-readable page preview (the reward) ── */
+  .prev{position:relative;background:linear-gradient(180deg,#fff,#fcfbf8);border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow-sm);padding:17px 16px 15px;margin:0 0 12px;text-align:left;animation:rise .62s ease both}
+  .prev .tag{position:absolute;top:-11px;right:14px;background:var(--ink);color:#fff;font-size:10.5px;font-weight:700;
+    letter-spacing:.03em;padding:5px 10px;border-radius:999px;box-shadow:var(--shadow-sm)}
+  .prow{display:flex;align-items:center;gap:12px}
+  .pav{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-size:20px;
+    font-weight:600;color:#fff;background:var(--ring2,#2467e8);box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--ring2,#2467e8)}
+  .pmeta b{font-family:var(--serif);font-size:17px;font-weight:600;display:block;line-height:1.2}
+  .pmeta span{font-size:12px;color:var(--ink-faint)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+  .chip{font-size:12px;color:var(--ink-soft);background:rgba(22,20,18,.05);border:1px solid var(--line);padding:5px 10px;border-radius:999px}
+  .areadable{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink-soft);line-height:1.45;
+    margin-top:13px;background:rgba(36,103,232,.05);border:1px solid rgba(36,103,232,.13);border-radius:11px;padding:9px 11px}
+  .areadable .d{flex:none;width:7px;height:7px;border-radius:50%;background:var(--blue);margin-top:5px;box-shadow:0 0 0 3px rgba(36,103,232,.12)}
+  .caption{font-size:12.5px;color:var(--ink-soft);margin:0 2px 20px}
+  .caption b{color:var(--ink);font-weight:600}
+
+  .cta{display:block;background:var(--ink);color:#fff;font-family:var(--sans);font-size:16px;font-weight:600;
+    text-decoration:none;padding:16px 20px;border-radius:999px;box-shadow:var(--shadow-sm);transition:transform .1s}
+  .cta:active{transform:translateY(1px)}
+  .sub{font-size:13px;color:var(--ink-soft);margin:13px 0 0}
+  .sub .num{color:var(--ink);font-weight:600;white-space:nowrap}
+  .consent{font-size:12.5px;color:var(--ink-faint);margin:20px 4px 0;line-height:1.5;border-top:.5px solid var(--line);padding-top:15px}
+  .foot{font-size:12px;color:var(--ink-faint);margin-top:18px}
   .foot a{color:var(--ink-soft)}
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="brand"><span class="ld"></span>HiRey</div>
-    <div class="eyebrow" id="eyebrow">You met</div>
-    <div class="card">
-      <div class="ava" id="ava">?</div>
-      <h1 id="name">Someone</h1>
-      <p class="headline" id="headline"></p>
-      <div class="links" id="links"></div>
-      <button class="save" id="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Save to contacts</button>
 
-      <div class="claim">
-        <p id="claimLede">Want a card like this?</p>
-        <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your own &rarr;</a>
+    <!-- we-met card hero: the moment, carried forward -->
+    <div class="met">
+      <div class="eyebrow">We met</div>
+      <div class="faces">
+        <div class="av" id="avA">?</div>
+        <div class="amp">&times;</div>
+        <div class="av" id="avB">?</div>
       </div>
-      <p class="consent">No face recognition — you were named by the person who met you. You decide what’s public.</p>
+      <div class="names" id="names">Someone &times; You</div>
+      <div class="when" id="when">On HiRey</div>
     </div>
+
+    <!-- who you met: the sharer, legible without a click-through to LinkedIn -->
+    <div class="sender" id="sender" style="display:none">
+      <div class="lbl">Who you met</div>
+      <div class="who">
+        <div class="sav" id="sav">?</div>
+        <div>
+          <div class="sname" id="sname">&mdash;</div>
+          <div class="shl" id="shl"></div>
+        </div>
+      </div>
+      <p class="sbio" id="sbio" style="display:none"></p>
+      <div class="glance" id="glance" style="display:none">
+        <div class="grow" id="gWork" style="display:none"><span class="gk">Working on</span><span class="gv" id="gWorkV"></span></div>
+        <div class="grow" id="gLook" style="display:none"><span class="gk">Looking for</span><span class="gv" id="gLookV"></span></div>
+      </div>
+      <div class="links" id="slinks"></div>
+      <a class="full" id="sfull" style="display:none">See their full HiRey page
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <button class="savebtn" id="saveSender" type="button" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Save <span id="saveName">them</span> to contacts</span></button>
+    </div>
+
+    <h1 id="head">Claim your page.</h1>
+    <p class="lede" id="lede">You were added on HiRey. Claim the page people reach when they look you up.</p>
+
+    <!-- the reward: a preview of their own agent-readable page -->
+    <div class="prev">
+      <div class="tag">🤖 Agent-readable</div>
+      <div class="prow">
+        <div class="pav" id="pav">?</div>
+        <div class="pmeta"><b id="pname">Your name</b><span>＋ add what you do</span></div>
+      </div>
+      <div class="chips"><span class="chip">＋ X</span><span class="chip">＋ Website</span><span class="chip">＋ Anything</span></div>
+      <div class="areadable"><span class="d"></span><span>An AI assistant reads this page directly — it can <b style="color:var(--ink);font-weight:600">find, cite, and reach you</b> here. No LinkedIn wall, no click-through.</span></div>
+    </div>
+    <p class="caption" id="cap">Yours the moment you claim — a page exactly like theirs above. Add your links once; everyone, and every agent, finds you here.</p>
+
+    <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your page</a>
+    <p class="sub">Text <b>“hi”</b> — your agent does the rest. ~30 seconds.<br>Or text <span class="num">hi</span> to <span class="num">+1 (916) 999-9971</span>.</p>
+
+    <p class="consent">You’re in control: you choose whether to claim, and you decide what’s public. No face recognition — you were named by the person who met you.</p>
     <p class="foot"><a href="https://hirey.ai">hirey.ai</a> · Let your agent find your people.</p>
   </div>
 <script>
   (function(){
     var q=new URLSearchParams(location.search);
-    function g(k){ return (q.get(k)||"").trim(); }
-    function clean(s){ return s.replace(/[<>]/g,"").trim(); }
-    var from=clean(g("from")), name=clean(g("name")), on=clean(g("on"));
-    var hl=clean(g("hl")), ph=g("ph"), em=g("em"), x=g("x").replace(/^@+/,""), w=g("w"), li=g("li"), me=g("me"), pic=g("pic");
-    var firstFrom=from?from.split(" ")[0]:"", firstName=name?name.split(" ")[0]:"";
+    function clean(s){return (s||"").replace(/[<>]/g,"").trim();}  // keep & — names/headlines like "Founder & CEO"; these render via textContent or plain element text
+    var from=clean(q.get("from")), name=clean(q.get("name"));
+    var meUrl=(q.get("me")||"").trim(), pic=(q.get("pic")||"").trim(), on=clean(q.get("on"));
+    var firstName=name?name.split(" ")[0]:"";
 
-    var palette=["#6b4ea0","#2467e8","#0d9488","#d18a00","#c0504d","#7c4dff"];
-    function hue(s){ var h=0,t=s||"x"; for(var i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))>>>0; return palette[h%palette.length]; }
-    function mono(s){ var p=(s||"?").trim().split(/\s+/); return ((p[0]||"?")[0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase(); }
-
-    if(from){ document.getElementById("eyebrow").textContent="You met"; document.getElementById("name").textContent=from; }
-    document.getElementById("headline").textContent=hl||(on?("Met "+on):"");
-    var ava=document.getElementById("ava");
-    ava.textContent=mono(from); ava.style.setProperty("--ring",hue(from));
-    if(/^https?:\/\//.test(pic)){ var im=new Image(); im.onload=function(){ ava.textContent=""; ava.style.backgroundImage="url('"+pic.replace(/['"\\]/g,"")+"')"; }; im.src=pic; }
-
-    var IC={
-      x:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7 8 8.2 12h-6.4l-5-7.3L5.7 22H2.5l7.5-8.6L2 2h6.5l4.6 6.7L18.9 2zm-1.1 18h1.7L7.3 3.8H5.5L17.8 20z"/></svg>',
-      w:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
-      li:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2.05 3.77-2.05 4 0 4.75 2.6 4.75 6V21H20v-5.3c0-1.26-.02-2.9-1.76-2.9-1.77 0-2.04 1.38-2.04 2.8V21H9z"/></svg>',
-      ph:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>',
-      em:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 6l9 7 9-7"/></svg>'
-    };
-    var rows=[];
-    if(x)  rows.push({k:IC.x, v:"@"+x, href:"https://x.com/"+encodeURIComponent(x)});
-    if(w)  rows.push({k:IC.w, v:w.replace(/^https?:\/\//,"").replace(/\/$/,""), href:w});
-    if(li) rows.push({k:IC.li, v:li.replace(/^https?:\/\/(www\.)?/,"").replace(/\/$/,""), href:li});
-    if(ph) rows.push({k:IC.ph, v:ph, href:"tel:"+ph.replace(/[^\d+]/g,"")});
-    if(em) rows.push({k:IC.em, v:em, href:"mailto:"+em});
-    if(me) rows.push({k:IC.w, v:"HiRey page", href:me});
-    var L=document.getElementById("links");
-    if(rows.length){
-      L.innerHTML=rows.map(function(r){
-        var ext=/^https?:/.test(r.href);
-        return '<a class="lrow" href="'+r.href.replace(/"/g,"&quot;")+'"'+(ext?' target="_blank" rel="noopener"':'')+'><span class="lk">'+r.k+'</span><span class="lv">'+r.v.replace(/[<>&]/g,"")+'</span><span class="la">&rsaquo;</span></a>';
-      }).join("");
-    } else { L.style.display="none"; }
-
-    // vCard "save to contacts"
-    function vc(s){ return String(s).replace(/([,;\\])/g,"\\$1").replace(/\n/g,"\\n"); }
-    function vcard(){
-      var a=["BEGIN:VCARD","VERSION:3.0","FN:"+vc(from||"Contact")];
-      if(hl) a.push("TITLE:"+vc(hl));
-      if(ph) a.push("TEL;TYPE=CELL:"+vc(ph));
-      if(em) a.push("EMAIL;TYPE=INTERNET:"+vc(em));
-      if(w)  a.push("URL:"+vc(w));
-      if(x)  a.push("URL:"+vc("https://x.com/"+x));
-      if(li) a.push("URL:"+vc(li));
-      if(me) a.push("URL:"+vc(me));
-      a.push("NOTE:"+vc("Met on HiRey"+(on?(" · "+on):"")));
-      a.push("END:VCARD");
-      return a.join("\r\n");
+    var palette=["#d18a00","#2467e8","#34c759","#7c4dff","#e5484d","#0d9488"];
+    function hue(s){var h=0,t=(s||"x");for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0;return palette[h%palette.length];}
+    function mono(s){var p=(s||"?").trim().split(/\s+/);return ((p[0]||"?")[0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase();}
+    function safeURL(u){ u=(u||"").trim(); if(!u) return ""; if(!/^https?:\/\//i.test(u)) u="https://"+u; return u.replace(/["'<>]/g,""); }
+    function vcE(s){ return (s||"").replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;"); }
+    // Build a vCard for the SHARER so the recipient can save them to their phone — no claim, no link tapping.
+    function senderVCard(){
+      var nm=from||"Contact", parts=nm.trim().split(/\s+/);
+      var L=["BEGIN:VCARD","VERSION:3.0","N:"+vcE(parts.length>1?parts.slice(1).join(" "):"")+";"+vcE(parts[0]||nm)+";;;","FN:"+vcE(nm)];
+      if(hl) L.push("TITLE:"+vcE(hl));
+      if(tw) L.push("X-SOCIALPROFILE;TYPE=twitter:https://x.com/"+tw);
+      var wu=safeURL(web); if(wu) L.push("URL:"+vcE(wu));
+      var mu=safeURL(meUrl); if(mu) L.push("URL:"+vcE(mu));
+      var lu=safeURL(li); if(lu) L.push("URL:"+vcE(lu));
+      if(/^https?:\/\//.test(pic)) L.push("PHOTO;VALUE=URI:"+pic.replace(/[\s"'<>]/g,""));
+      var note=[]; if(on) note.push("Met "+on); if(bio) note.push(bio); note.push("Saved from HiRey");
+      L.push("NOTE:"+vcE(note.join("\n")),"END:VCARD");
+      return L.join("\r\n");
     }
-    var saveBtn=document.getElementById("save");
-    if(!(ph||em||x||w||li||me)){ saveBtn.style.display="none"; }
-    saveBtn.onclick=function(){
-      try{
-        var blob=new Blob([vcard()],{type:"text/vcard;charset=utf-8"});
-        var a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-        a.download=(from||"contact").replace(/[^\w]+/g,"_")+".vcf";
-        document.body.appendChild(a); a.click(); setTimeout(function(){ a.remove(); },200);
-      }catch(e){}
-    };
+    function saveSenderContact(){
+      var blob=new Blob([senderVCard()],{type:"text/vcard"}), fname=(from?from.split(" ")[0]:"contact")+".vcf";
+      var file=new File([blob],fname,{type:"text/vcard"});
+      try{ if(navigator.canShare&&navigator.canShare({files:[file]})){ navigator.share({files:[file],title:"Save "+(from||"contact")}).catch(function(){}); return; } }catch(e){}
+      var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+    }
 
-    // secondary: claim your own
-    document.getElementById("claimLede").innerHTML=(firstName?("<b>"+firstName+"</b> — "):"")+"want a card like "+(firstFrom?("<b>"+firstFrom+"</b>’s"):"this")+"?";
+    // hero faces (sender gets photo if passed; both fall back to monogram + colored ring)
+    var avA=document.getElementById("avA"), avB=document.getElementById("avB");
+    avA.textContent=mono(from); avA.style.setProperty("--ring",hue(from||"a"));
+    if(/^https?:\/\//.test(pic)){ var im=new Image(); im.onload=function(){ avA.textContent=""; avA.style.backgroundImage="url('"+pic.replace(/['"\\]/g,"")+"')"; }; im.src=pic; }
+    avB.textContent=mono(name); avB.style.setProperty("--ring",hue(name||"b"));
+    document.getElementById("names").innerHTML=(from?from:"Someone")+" &times; "+(name?name:"You");
+    document.getElementById("when").textContent=on?("Met "+on):"A recent connection";
+
+    // ── who you met: render the sharer inline so they're known at a glance, even days later ──
+    var hl=clean(q.get("hl")), bio=clean(q.get("bio"));
+    var tw=(q.get("tw")||"").trim().replace(/^@+/,"").replace(/[^A-Za-z0-9_]/g,"");
+    var web=q.get("web")||"", li=q.get("li")||"";
+    var X_IC="<svg viewBox='0 0 24 24' fill='currentColor'><path d='M18.24 2H21.5l-7.5 8.57L23 22h-6.9l-5.4-7.06L4.9 22H1.64l8.02-9.17L1 2h7.08l4.88 6.46L18.24 2zm-1.2 18h1.8L7.05 3.9H5.1L17.04 20z'/></svg>";
+    var WEB_IC="<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8'><circle cx='12' cy='12' r='9'/><path d='M3 12h18'/><path d='M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z'/></svg>";
+    var LI_IC="<svg viewBox='0 0 24 24' fill='currentColor'><path d='M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14zM8.34 9.5H5.67V18h2.67V9.5zM7 6.06a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1zM18.34 18v-4.67c0-2.5-1.34-3.66-3.12-3.66-1.44 0-2.08.79-2.44 1.35V9.5h-2.67V18h2.67v-4.34c0-.5.36-1.56 1.39-1.56 1 0 1.29.7 1.29 1.72V18h2.67z'/></svg>";
+    if(from||hl||tw||web||li){
+      document.getElementById("sender").style.display="";
+      var sav=document.getElementById("sav");
+      sav.textContent=mono(from); sav.style.setProperty("--sring",hue(from||"a"));
+      if(/^https?:\/\//.test(pic)){ var im2=new Image(); im2.onload=function(){ sav.textContent=""; sav.style.backgroundImage="url('"+pic.replace(/['"\\]/g,"")+"')"; }; im2.src=pic; }
+      document.getElementById("sname").textContent=from||"Someone you met";
+      var shl=document.getElementById("shl");
+      if(hl) shl.textContent=hl; else shl.style.display="none";
+      if(bio){ var sb=document.getElementById("sbio"); sb.textContent=bio; sb.style.display=""; }
+      // at a glance — what they're working on / looking for, so you can judge "should I connect" without opening LinkedIn
+      var wo=clean(q.get("wo")), lf=clean(q.get("lf"));
+      if(wo||lf){ document.getElementById("glance").style.display="";
+        if(wo){ document.getElementById("gWorkV").textContent=wo; document.getElementById("gWork").style.display=""; }
+        if(lf){ document.getElementById("gLookV").textContent=lf; document.getElementById("gLook").style.display=""; } }
+      var L=[];
+      if(tw) L.push("<a class='lk' href='https://x.com/"+tw+"' target='_blank' rel='noopener'>"+X_IC+"@"+tw+"</a>");
+      var wu=safeURL(web); if(wu) L.push("<a class='lk' href='"+wu+"' target='_blank' rel='noopener'>"+WEB_IC+clean(web.replace(/^https?:\/\//,"").replace(/\/+$/,""))+"</a>");
+      // LinkedIn kept as an option (adoption first, stay open) — the "At a glance" block above already lets you skip it.
+      var lu=safeURL(li); if(lu) L.push("<a class='lk' href='"+lu+"' target='_blank' rel='noopener'>"+LI_IC+"LinkedIn</a>");
+      document.getElementById("slinks").innerHTML=L.join("");
+      var mu=safeURL(meUrl); if(mu){ var sf=document.getElementById("sfull"); sf.href=mu; sf.target="_blank"; sf.rel="noopener"; sf.style.display="inline-flex"; }
+      var ss=document.getElementById("saveSender");
+      document.getElementById("saveName").textContent=from?from.split(" ")[0]:"them";
+      ss.style.display="flex"; ss.onclick=saveSenderContact;
+    }
+
+    // claim copy
+    if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
+    document.getElementById("lede").innerHTML=(from?("<b>"+from+"</b> "):"Someone ")+"met you and wants to stay connected. Claim the page people — and their agents — reach when they look you up. No LinkedIn wall.";
+
+    // reward preview = their future page
+    var pav=document.getElementById("pav");
+    pav.textContent=mono(name||"You"); pav.style.setProperty("--ring2",hue(name||"you"));
+    document.getElementById("pname").textContent=name||"Your name";
+
+    // sms cta carries the name
     var ua=navigator.userAgent||"";
     var smsBody="hi"+(name?(", I'm "+name):"");
     var sep=/android/i.test(ua)?"?":"?&";
