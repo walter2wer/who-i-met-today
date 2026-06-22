@@ -882,6 +882,7 @@ function myCardURL(){ const E=encodeURIComponent, pr=HI.profile||{};
   if(pr.bio_markdown) u+="&bio="+E(pr.bio_markdown.replace(/[#*_`>\[\]()]/g," ").replace(/\s+/g," ").trim().slice(0,140));
   return u; }
 async function shareMyCard(){
+  if(!HI.authed() && !localStorage.getItem("wim_my_name")){ toast("Sign in (or set your name) first — then share your card"); return; }
   const me=getMyName(), url=myCardURL(), text="Hi — I'm "+me+". Here's my card 👇";
   try{ if(navigator.share){ await navigator.share({title:me,text,url}); return; } }catch(e){ if(e&&e.name==="AbortError") return; }
   try{ await navigator.clipboard.writeText(text+" "+url); toast("Card link copied — paste it to them"); }catch(_){ prompt("Copy your card link:", url); }
@@ -969,6 +970,8 @@ function renderAccount(){
     <div class="grip"></div>
     <h2>Sign in to HiRey</h2>
     <p class="auth-msg">Your diary already lives on this device. Sign in to put <b>your</b> profile on the we-met cards and let the people you meet claim a real HiRey page — they choose whether to accept.</p>
+    <button class="btn btn-ghost" id="acctShare2" style="width:100%;margin:2px 0 6px;gap:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v13M8 6l4-4 4 4M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>Share my card</button>
+    <p style="font-size:12px;color:var(--ink-faint);text-align:center;margin:0 0 16px">Sign in below to make it your live, agent-readable card.</p>
     <div class="seg" id="authSeg">
       <button data-m="email" class="${_auth.method==="email"?"on":""}">Email</button>
       <button data-m="phone" class="${_auth.method==="phone"?"on":""}">Phone</button>
@@ -978,6 +981,7 @@ function renderAccount(){
     <p class="sub" style="font-size:12.5px;color:var(--ink-faint);text-align:center;margin:16px 0 0">Just want a name on your cards? <a id="authLocal" style="color:var(--ink-soft);cursor:pointer;text-decoration:underline">Set a local name</a></p>`;
   document.querySelectorAll("#authSeg button").forEach(b=>b.onclick=()=>{ _auth={method:b.dataset.m,stage:"enter",flowId:null,value:"",busy:false}; renderAccount(); });
   document.getElementById("authLocal").onclick=()=>nameEditor();
+  const sc=document.getElementById("acctShare2"); if(sc) sc.onclick=shareMyCard;
   renderAuthArea();
 }
 function renderAuthArea(){
