@@ -597,10 +597,10 @@ async function makeVCard(p){
 }
 async function saveContact(p){
   let vc; try{ vc=await makeVCard(p); }catch(_){ toast("Couldn’t build the contact"); return; }
-  const blob=new Blob([vc],{type:"text/vcard"}), file=new File([blob],(p.name.split(" ")[0]||"contact")+".vcf",{type:"text/vcard"});
-  try{ if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:"Save "+p.name}); return; } }catch(e){ if(e&&e.name==="AbortError") return; }
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.appendChild(a); a.click(); a.remove();
-  toast("Contact card saved — open it to add "+p.name.split(" ")[0]);
+  // Download/open the vCard directly so the OS shows "Add Contact" — NOT the share sheet.
+  const blob=new Blob([vc],{type:"text/vcard"}), fname=(p.name.split(" ")[0]||"contact")+".vcf";
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+  toast("Saving "+p.name.split(" ")[0]+" to your contacts…");
 }
 function dictatePerson(pid){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ return; } r2.lang=navigator.language||"en-US"; r2.interimResults=true;
   const btn=document.getElementById("pdVoice"), lbl=document.getElementById("pdVoiceLbl"); let acc="";
@@ -878,7 +878,7 @@ function makeMyVCard(){ const pr=HI.profile||{}, nm=getMyName(), parts=nm.trim()
 function makeMyVCardFile(){ return new File([makeMyVCard()],(getMyName().split(" ")[0]||"me")+".vcf",{type:"text/vcard"}); }
 /* Public "at a glance" substance — what you're working on / looking for. Renders inline on the
    shared page so the person you met can judge "should I connect" WITHOUT opening LinkedIn. */
-function getWorkingOn(){ return (localStorage.getItem("wim_working_on")||"").trim(); }
+function getWorkingOn(){ return (localStorage.getItem("wim_working_on")||"").trim() || ((HI.profile&&HI.profile.headline)||"").trim(); }
 function getLookingFor(){ return (localStorage.getItem("wim_looking_for")||"").trim(); }
 /* Share MY card — a standalone, no-counterpart broadcast of my own profile. For
    "someone has my number days later and asks who I am": fire off a link that opens
@@ -1110,8 +1110,10 @@ async function hiSaveProfile(){
   const norm=u=>{ u=(u||"").trim(); return u?(/^https?:\/\//i.test(u)?u:"https://"+u):""; };
   const site=norm(document.getElementById("hpSite").value);
   const li=norm(document.getElementById("hpLi").value);
-  // "At a glance" fields live locally (Hi profile schema doesn't carry them yet); they ride the share link.
-  localStorage.setItem("wim_working_on",(document.getElementById("hpWork").value||"").trim());
+  // "At a glance" rides the share link. Working on auto-fills from the headline — only persist a CUSTOM value
+  // (≠ headline) so it never goes stale when the headline changes; Looking for is purely optional.
+  const _woH=(document.getElementById("hpHead").value||"").trim(), _woV=(document.getElementById("hpWork").value||"").trim();
+  localStorage.setItem("wim_working_on",(_woV&&_woV!==_woH)?_woV:"");
   localStorage.setItem("wim_looking_for",(document.getElementById("hpLook").value||"").trim());
   if(!name){ toast("Add your name"); return; }
   const btn=document.getElementById("hpSave"); btn.textContent="Saving…"; btn.disabled=true;

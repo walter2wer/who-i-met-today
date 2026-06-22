@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbfaf7">
 <meta name="color-scheme" content="light">
-<title>Claim your HiRey page</title>
+<title>HiRey</title>
+<meta name="description" content="A real, agent-readable HiRey card — see who this is, save them, and connect. No app, no login.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="HiRey">
+<meta property="og:description" content="A real, agent-readable card — see who this is, save them, and connect. No app, no login.">
+<meta name="twitter:card" content="summary">
 <style>
   :root{
     --ink:#161412; --ink-soft:rgba(22,20,18,.62); --ink-faint:rgba(22,20,18,.42);
@@ -192,10 +197,9 @@
       return L.join("\r\n");
     }
     function saveSenderContact(){
+      // Open the vCard directly so the OS shows "Add Contact" — NOT the share sheet.
       var blob=new Blob([senderVCard()],{type:"text/vcard"}), fname=(from?from.split(" ")[0]:"contact")+".vcf";
-      var file=new File([blob],fname,{type:"text/vcard"});
-      try{ if(navigator.canShare&&navigator.canShare({files:[file]})){ navigator.share({files:[file],title:"Save "+(from||"contact")}).catch(function(){}); return; } }catch(e){}
-      var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+      var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; a.rel="noopener"; document.body.appendChild(a); a.click(); a.remove();
     }
 
     // hero faces (sender gets photo if passed; both fall back to monogram + colored ring)
@@ -266,6 +270,7 @@
       setBio(bio);
       // at a glance — what they're working on / looking for, so you can judge "should I connect" without opening LinkedIn
       var wo=clean(q.get("wo")), lf=clean(q.get("lf"));
+      if(wo && hl && wo.toLowerCase()===hl.toLowerCase()) wo="";  // auto Working-on defaults to the headline — don't repeat it on the card
       if(wo||lf){ document.getElementById("glance").style.display="";
         if(wo){ document.getElementById("gWorkV").textContent=wo; document.getElementById("gWork").style.display=""; }
         if(lf){ document.getElementById("gLookV").textContent=lf; document.getElementById("gLook").style.display=""; } }
