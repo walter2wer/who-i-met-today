@@ -899,9 +899,16 @@ function myCardURL(){ const E=encodeURIComponent, pr=HI.profile||{};
   return u; }
 async function shareMyCard(){
   if(!HI.authed() && !localStorage.getItem("wim_my_name")){ toast("Sign in (or set your name) first — then share your card"); return; }
-  const me=getMyName(), url=myCardURL(), text="Hi — I'm "+me+". Here's my card 👇";
-  try{ if(navigator.share){ await navigator.share({title:me,text,url}); return; } }catch(e){ if(e&&e.name==="AbortError") return; }
-  try{ await navigator.clipboard.writeText(text+" "+url); toast("Card link copied — paste it to them"); }catch(_){ prompt("Copy your card link:", url); }
+  // Phone/email aren't in the public Hi profile (the number is only an auth anchor), and by design they
+  // never go on the public card link — they ride the vCard attached to this direct share. Make sure there is one.
+  if(!hasMyContact()){ toast("Add your phone or email so people can reach you — then share"); myContactEditor(); return; }
+  const me=getMyName(), url=myCardURL(), text="Hi — I'm "+me+". Here's my card 👇  "+url;
+  let files=[]; try{ files=[makeMyVCardFile()]; }catch(_){ files=[]; }
+  try{
+    if(files.length && navigator.canShare && navigator.canShare({files})){ await navigator.share({files,text,title:me}); return; }
+    if(navigator.share){ await navigator.share({text,title:me}); return; }
+  }catch(e){ if(e&&e.name==="AbortError") return; }
+  try{ await navigator.clipboard.writeText(text); toast("Card link copied — paste it to them"); }catch(_){ prompt("Copy your card link:", url); }
 }
 function updateMe(){
   const n=(HI.myName()||localStorage.getItem("wim_my_name")||"").trim();
