@@ -279,8 +279,18 @@
     hydrateLive(meUrl);
 
     // claim copy
-    if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
-    document.getElementById("lede").innerHTML=(from?("<b>"+from+"</b> "):"Someone ")+"met you and wants to stay connected. Claim the page people — and their agents — reach when they look you up. No LinkedIn wall.";
+    // intro mode = a standalone "here's my card" share (no specific recipient) — e.g. someone has your number days later and asks who you are
+    var introMode = q.get("intro")==="1" || !name;
+    if(introMode){
+      var metEl=document.querySelector(".met"); if(metEl) metEl.style.display="none";   // drop the recipient-specific "we met" hero
+      var lbl=document.querySelector("#sender .lbl"); if(lbl) lbl.textContent="HiRey card";
+      document.getElementById("head").textContent="Get your own HiRey card.";
+      document.getElementById("lede").innerHTML="This is "+(from?("<b>"+from+"</b>"):"someone")+" on HiRey — an agent-readable card people (and their agents) can read and save, no LinkedIn wall. Want one? It’s free.";
+      var ctaB=document.getElementById("cta"); if(ctaB) ctaB.textContent="Get your own card";
+    } else {
+      if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
+      document.getElementById("lede").innerHTML=(from?("<b>"+from+"</b> "):"Someone ")+"met you and wants to stay connected. Claim the page people — and their agents — reach when they look you up. No LinkedIn wall.";
+    }
 
     // reward preview = their future page
     var pav=document.getElementById("pav");
