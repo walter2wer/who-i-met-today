@@ -69,6 +69,9 @@
   .sender .grow{display:flex;flex-direction:column;gap:3px}
   .sender .gk{font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
   .sender .gv{font-size:13.5px;color:var(--ink);line-height:1.45}
+  /* live-profile bio can be long (full schema.org description) — clamp with a Show more toggle */
+  .sender .sbio.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .sender .biomore{display:inline-block;background:none;border:0;padding:5px 0 0;margin:0;color:var(--blue);font-family:var(--sans);font-size:12.5px;font-weight:600;cursor:pointer}
 
   /* ── claim ── */
   h1{font-family:var(--serif);font-weight:600;font-size:25px;line-height:1.15;letter-spacing:-.01em;margin:26px 4px 9px}
@@ -210,6 +213,48 @@
     var X_IC="<svg viewBox='0 0 24 24' fill='currentColor'><path d='M18.24 2H21.5l-7.5 8.57L23 22h-6.9l-5.4-7.06L4.9 22H1.64l8.02-9.17L1 2h7.08l4.88 6.46L18.24 2zm-1.2 18h1.8L7.05 3.9H5.1L17.04 20z'/></svg>";
     var WEB_IC="<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8'><circle cx='12' cy='12' r='9'/><path d='M3 12h18'/><path d='M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z'/></svg>";
     var LI_IC="<svg viewBox='0 0 24 24' fill='currentColor'><path d='M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14zM8.34 9.5H5.67V18h2.67V9.5zM7 6.06a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1zM18.34 18v-4.67c0-2.5-1.34-3.66-3.12-3.66-1.44 0-2.08.79-2.44 1.35V9.5h-2.67V18h2.67v-4.34c0-.5.36-1.56 1.39-1.56 1 0 1.29.7 1.29 1.72V18h2.67z'/></svg>";
+    // ---- sender card rendering (shared by snapshot render AND live hydrate) ----
+    function renderLinks(){
+      var L=[];
+      if(tw) L.push("<a class='lk' href='https://x.com/"+tw+"' target='_blank' rel='noopener'>"+X_IC+"@"+tw+"</a>");
+      var wu=safeURL(web); if(wu) L.push("<a class='lk' href='"+wu+"' target='_blank' rel='noopener'>"+WEB_IC+clean(web.replace(/^https?:\/\//,"").replace(/\/+$/,""))+"</a>");
+      var lu=safeURL(li); if(lu) L.push("<a class='lk' href='"+lu+"' target='_blank' rel='noopener'>"+LI_IC+"LinkedIn</a>");
+      document.getElementById("slinks").innerHTML=L.join("");
+    }
+    function setBio(text){
+      var sb=document.getElementById("sbio"); var old=document.getElementById("bioMore"); if(old) old.remove();
+      if(!text){ sb.style.display="none"; return; }
+      sb.textContent=text; sb.style.display=""; sb.style.whiteSpace="pre-line";
+      if(text.length>200||text.indexOf("\n")>=0){
+        sb.classList.add("clamp");
+        var btn=document.createElement("button"); btn.id="bioMore"; btn.className="biomore"; btn.type="button"; btn.textContent="Show more";
+        btn.onclick=function(){ btn.textContent=sb.classList.toggle("clamp")?"Show more":"Show less"; };
+        sb.parentNode.insertBefore(btn,sb.nextSibling);
+      } else sb.classList.remove("clamp");
+    }
+    function pickLinks(urls){  // categorize schema.org sameAs[] → x / linkedin / website
+      (urls||[]).forEach(function(u){ if(typeof u!=="string"||!/^https?:\/\//i.test(u)) return;
+        if(/(?:x|twitter)\.com\//i.test(u)){ var mm=u.match(/(?:x|twitter)\.com\/@?([A-Za-z0-9_]+)/i); if(mm&&mm[1]) tw=mm[1]; }
+        else if(/linkedin\.com/i.test(u)) li=u;
+        else if(!web) web=u; });
+    }
+    // hybrid direct-read: pull the LIVE schema.org Person JSON-LD off the owner page and upgrade the card in place.
+    // Fetch fails / page has no JSON-LD → the snapshot already on screen just stays. Zero risk.
+    function hydrateLive(url){
+      if(!/^https:\/\/[^/]*hirey[^/]*\/owner\//i.test(url||"")) return;
+      fetch(url).then(function(r){ return r.ok?r.text():null; }).then(function(html){
+        if(!html) return;
+        var m=html.match(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/i); if(!m) return;
+        var o; try{ o=JSON.parse(m[1].trim()); }catch(e){ return; } if(!o||o["@type"]!=="Person") return;
+        document.getElementById("sender").style.display="";
+        if(o.name){ from=clean(o.name); document.getElementById("sname").textContent=from; document.getElementById("saveName").textContent=from.split(" ")[0]||"them"; }
+        if(o.jobTitle){ hl=clean(o.jobTitle); var shl=document.getElementById("shl"); shl.textContent=hl; shl.style.display=""; }
+        if(o.description){ bio=clean(o.description); setBio(bio); }
+        if(typeof o.image==="string"&&/^https?:\/\//.test(o.image)){ pic=o.image; var sav=document.getElementById("sav"); var im=new Image(); im.onload=function(){ sav.textContent=""; sav.style.backgroundImage="url('"+o.image.replace(/['"\\]/g,"")+"')"; }; im.src=o.image; }
+        if(Array.isArray(o.sameAs)){ tw=""; web=""; li=""; pickLinks(o.sameAs); }
+        renderLinks();
+      }).catch(function(){});
+    }
     if(from||hl||tw||web||li){
       document.getElementById("sender").style.display="";
       var sav=document.getElementById("sav");
@@ -218,23 +263,20 @@
       document.getElementById("sname").textContent=from||"Someone you met";
       var shl=document.getElementById("shl");
       if(hl) shl.textContent=hl; else shl.style.display="none";
-      if(bio){ var sb=document.getElementById("sbio"); sb.textContent=bio; sb.style.display=""; }
+      setBio(bio);
       // at a glance — what they're working on / looking for, so you can judge "should I connect" without opening LinkedIn
       var wo=clean(q.get("wo")), lf=clean(q.get("lf"));
       if(wo||lf){ document.getElementById("glance").style.display="";
         if(wo){ document.getElementById("gWorkV").textContent=wo; document.getElementById("gWork").style.display=""; }
         if(lf){ document.getElementById("gLookV").textContent=lf; document.getElementById("gLook").style.display=""; } }
-      var L=[];
-      if(tw) L.push("<a class='lk' href='https://x.com/"+tw+"' target='_blank' rel='noopener'>"+X_IC+"@"+tw+"</a>");
-      var wu=safeURL(web); if(wu) L.push("<a class='lk' href='"+wu+"' target='_blank' rel='noopener'>"+WEB_IC+clean(web.replace(/^https?:\/\//,"").replace(/\/+$/,""))+"</a>");
-      // LinkedIn kept as an option (adoption first, stay open) — the "At a glance" block above already lets you skip it.
-      var lu=safeURL(li); if(lu) L.push("<a class='lk' href='"+lu+"' target='_blank' rel='noopener'>"+LI_IC+"LinkedIn</a>");
-      document.getElementById("slinks").innerHTML=L.join("");
+      renderLinks();
       var mu=safeURL(meUrl); if(mu){ var sf=document.getElementById("sfull"); sf.href=mu; sf.target="_blank"; sf.rel="noopener"; sf.style.display="inline-flex"; }
       var ss=document.getElementById("saveSender");
       document.getElementById("saveName").textContent=from?from.split(" ")[0]:"them";
       ss.style.display="flex"; ss.onclick=saveSenderContact;
     }
+    // snapshot is on screen; now pull the LIVE profile and upgrade in place
+    hydrateLive(meUrl);
 
     // claim copy
     if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
