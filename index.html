@@ -597,10 +597,10 @@ async function makeVCard(p){
 }
 async function saveContact(p){
   let vc; try{ vc=await makeVCard(p); }catch(_){ toast("Couldn’t build the contact"); return; }
-  // Download/open the vCard directly so the OS shows "Add Contact" — NOT the share sheet.
-  const blob=new Blob([vc],{type:"text/vcard"}), fname=(p.name.split(" ")[0]||"contact")+".vcf";
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; document.body.appendChild(a); a.click(); a.remove();
-  toast("Saving "+p.name.split(" ")[0]+" to your contacts…");
+  // data: URI → one tap opens iOS "Create New Contact" directly (desktop/Android download the .vcf).
+  const a=document.createElement("a"); a.href="data:text/vcard;charset=utf-8,"+encodeURIComponent(vc);
+  a.download=(p.name.split(" ")[0]||"contact")+".vcf"; document.body.appendChild(a); a.click(); a.remove();
+  toast("Adding "+p.name.split(" ")[0]+" to your contacts…");
 }
 function dictatePerson(pid){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ return; } r2.lang=navigator.language||"en-US"; r2.interimResults=true;
   const btn=document.getElementById("pdVoice"), lbl=document.getElementById("pdVoiceLbl"); let acc="";
