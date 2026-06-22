@@ -864,6 +864,28 @@ function makeMyVCardFile(){ return new File([makeMyVCard()],(getMyName().split("
    shared page so the person you met can judge "should I connect" WITHOUT opening LinkedIn. */
 function getWorkingOn(){ return (localStorage.getItem("wim_working_on")||"").trim(); }
 function getLookingFor(){ return (localStorage.getItem("wim_looking_for")||"").trim(); }
+/* Share MY card — a standalone, no-counterpart broadcast of my own profile. For
+   "someone has my number days later and asks who I am": fire off a link that opens
+   my LIVE HiRey card (claim page intro mode, direct-reads /owner/{id}) + lets them
+   save me to contacts. No photo-of-them, no we-met capture, no app on their side. */
+function myCardURL(){ const E=encodeURIComponent, pr=HI.profile||{};
+  const myUrl=myLinktree(), myPic=myAvatar();
+  let u=CLAIM_BASE+"?intro=1&from="+E(getMyName());
+  if(myUrl) u+="&me="+E(myUrl);
+  if(myPic) u+="&pic="+E(myPic);
+  if(pr.headline) u+="&hl="+E(pr.headline);
+  if(pr.twitter_handle) u+="&tw="+E(pr.twitter_handle);
+  if(pr.website_url) u+="&web="+E(pr.website_url);
+  if(pr.linkedin_url) u+="&li="+E(pr.linkedin_url);
+  const wo=getWorkingOn(); if(wo) u+="&wo="+E(wo.slice(0,120));
+  const lf=getLookingFor(); if(lf) u+="&lf="+E(lf.slice(0,120));
+  if(pr.bio_markdown) u+="&bio="+E(pr.bio_markdown.replace(/[#*_`>\[\]()]/g," ").replace(/\s+/g," ").trim().slice(0,140));
+  return u; }
+async function shareMyCard(){
+  const me=getMyName(), url=myCardURL(), text="Hi — I'm "+me+". Here's my card 👇";
+  try{ if(navigator.share){ await navigator.share({title:me,text,url}); return; } }catch(e){ if(e&&e.name==="AbortError") return; }
+  try{ await navigator.clipboard.writeText(text+" "+url); toast("Card link copied — paste it to them"); }catch(_){ prompt("Copy your card link:", url); }
+}
 function updateMe(){
   const n=(HI.myName()||localStorage.getItem("wim_my_name")||"").trim();
   const el=document.getElementById("hdrSub");
@@ -929,11 +951,14 @@ function renderAccount(){
         <div><div class="nm">${esc(name)}</div>
         <div class="ct">${p.headline?esc(p.headline)+" · ":""}<span class="v">signed in</span>${onHi?` · ${onHi} on HiRey`:""}</div></div>
       </div>
+      <button class="btn btn-primary" id="acctShare" style="width:100%;margin:14px 0 6px;gap:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v13M8 6l4-4 4 4M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>Share my card</button>
+      <p style="font-size:12px;color:var(--ink-faint);margin:0 0 8px;line-height:1.45">Send anyone your live card — they see who you are and can save you, no app needed. Great when someone has your number but forgot who you are.</p>
       <button class="row-link" id="acctEdit"><span>Edit my HiRey profile<span class="sub">Name, headline, bio — public, shown on your cards</span></span>${CHEV}</button>
       <button class="row-link" id="acctContact"><span>Your contact card<span class="sub">Phone &amp; email — shared 1:1 with people you meet, never public</span></span>${CHEV}</button>
       ${url?`<button class="row-link" id="acctView"><span>View my public page<span class="sub">${esc(url.replace(/^https?:\/\//,""))}</span></span>${CHEV}</button>`:""}
       <button class="row-link" id="acctOut"><span>Sign out</span>${CHEV}</button>
       <p class="consent" style="margin-top:18px">Your diary stays on this device. Signing in only syncs your profile and lets the people you invite claim a real HiRey page.</p>`;
+    document.getElementById("acctShare").onclick=shareMyCard;
     document.getElementById("acctEdit").onclick=hiProfileEditor;
     document.getElementById("acctContact").onclick=myContactEditor;
     const v=document.getElementById("acctView"); if(v&&url) v.onclick=()=>window.open(url,"_blank");
