@@ -839,7 +839,9 @@ async function saveVoiceMoment(shareAfter){
 const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
 function getMyName(){ return (HI.myName()||localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
 function myLinktree(){ return (HI.profile&&HI.profile.owner_public_url)||((HI.session()||{}).owner_public_url)||""; }
-function myAvatar(){ return (HI.profile&&(HI.profile.avatar||HI.profile.avatar_url||HI.profile.avatar_thumb_url))||""; }
+function myAvatar(){ var a=(HI.profile&&(HI.profile.avatar||HI.profile.avatar_url||HI.profile.avatar_thumb_url))||"";
+  if(!a) a=(localStorage.getItem("wim_my_avatar")||"").trim();   // not-on-Hi / no-Hi-avatar fallback so the sender's face still rides the share
+  return /^https?:\/\//i.test(a)?a:""; }
 /* Build the claim/we-met link carrying the SENDER's identity inline — so the
    person you met can see who you are at a glance (face, headline, links) even
    when they re-open the link days later, without clicking through to LinkedIn. */
@@ -925,9 +927,13 @@ function nameEditor(){ const cur=localStorage.getItem("wim_my_name")||"";
     <h2>${cur?"Your name":"What&rsquo;s your name?"}</h2>
     <p style="font-size:14px;color:var(--ink-soft);margin:0 0 14px">It goes on the we-met cards you send — first name is fine. This is <b>you</b>, not the people you meet.</p>
     <input type="text" id="onbName" placeholder="e.g. Walter" value="${esc(cur)}" autocomplete="off" autocapitalize="words">
+    <div class="field-label" style="margin-top:14px">Photo &mdash; optional <span style="font-weight:400;color:var(--ink-faint)">(image link &mdash; your face on the card)</span></div>
+    <input type="text" id="onbPic" placeholder="https://…/me.jpg" value="${esc(localStorage.getItem("wim_my_avatar")||"")}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
     <div class="sheet-actions">${cur?`<button class="btn btn-ghost" id="onbCancel">Cancel</button>`:""}<button class="btn btn-primary" id="onbSave" style="flex:1">${cur?"Save":"Continue"}</button></div>`;
   showSheet("sheet","scrim");
-  const save=()=>{ const v=document.getElementById("onbName").value.trim(); if(!v) return; localStorage.setItem("wim_my_name",v); hideSheet("sheet","scrim"); updateMe(); };
+  const save=()=>{ const v=document.getElementById("onbName").value.trim(); if(!v) return; localStorage.setItem("wim_my_name",v);
+    const pv=(document.getElementById("onbPic").value||"").trim(); localStorage.setItem("wim_my_avatar",pv?(/^https?:\/\//i.test(pv)?pv:"https://"+pv):"");  // face rides the share as ?pic= — works with zero login
+    hideSheet("sheet","scrim"); updateMe(); };
   document.getElementById("onbSave").onclick=save;
   const cc=document.getElementById("onbCancel"); if(cc) cc.onclick=()=>hideSheet("sheet","scrim");
   document.getElementById("onbName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); save(); }});
@@ -1087,6 +1093,8 @@ function hiProfileEditor(){
     <p class="auth-msg">This is <b>you</b> — it shows on your public page and the we-met cards you send.</p>
     <div class="field-label">Name</div>
     <input type="text" id="hpName" placeholder="e.g. Walter Chen" value="${esc(p.display_name||"")}" autocapitalize="words">
+    <div class="field-label" style="margin-top:14px">Photo &mdash; optional <span style="font-weight:400;color:var(--ink-faint)">(image link &mdash; e.g. your X or LinkedIn photo)</span></div>
+    <input type="text" id="hpPic" placeholder="https://…/me.jpg" value="${esc(localStorage.getItem("wim_my_avatar")||"")}" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false">
     <div class="field-label" style="margin-top:14px">Headline &mdash; optional</div>
     <input type="text" id="hpHead" placeholder="e.g. Founder, HiRey · SF" value="${esc(p.headline||"")}">
     <div class="field-label" style="margin-top:14px">About &mdash; optional</div>
@@ -1117,6 +1125,9 @@ async function hiSaveProfile(){
   const norm=u=>{ u=(u||"").trim(); return u?(/^https?:\/\//i.test(u)?u:"https://"+u):""; };
   const site=norm(document.getElementById("hpSite").value);
   const li=norm(document.getElementById("hpLi").value);
+  // Photo rides the share as ?pic= (sender's face on the claim card). Local-only: a hosted image URL,
+  // never an uploaded blob (would bloat the link). A real Hi avatar_url still wins in myAvatar().
+  localStorage.setItem("wim_my_avatar",norm(document.getElementById("hpPic").value));
   // "At a glance" rides the share link. Working on auto-fills from the headline — only persist a CUSTOM value
   // (≠ headline) so it never goes stale when the headline changes; Looking for is purely optional.
   const _woH=(document.getElementById("hpHead").value||"").trim(), _woV=(document.getElementById("hpWork").value||"").trim();
