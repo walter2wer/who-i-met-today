@@ -862,9 +862,9 @@ async function toggleMeetingVisibility(mid){
   const m=findCard(mid); if(!m||!m.hiImageId) return;
   const makePublic=!m.hiPublic;
   // Publishing a photo of someone you met is an explicit, consented act — confirm it.
-  if(makePublic && !confirm("Post this to the public Who I Met feed?\n\nIt will appear on /met for anyone to see, after a quick automatic review. Only do this with the consent of everyone pictured — each photo is a real person. You can switch it back to private anytime.")) return;
+  if(makePublic && !confirm("Submit this to the public Who I Met feed?\n\nIt shows up on /met for everyone once it's been reviewed — not instantly. Only do this with the consent of everyone pictured — each photo is a real person. You can switch it back to private anytime.")) return;
   const ok=await setMeetingPublic(m, makePublic);
-  if(ok){ renderAll(); toast(makePublic?"Posted to the public feed — tap again to make private":"Back to private — only you"); }
+  if(ok){ renderAll(); toast(makePublic?"Submitted — it appears in the public feed after review. Tap again for private.":"Back to private — only you"); }
 }
 function shareFromCard(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m||!m.personIds.length) return;
   showSheet("sheet2","scrim2");
