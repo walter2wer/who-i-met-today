@@ -109,6 +109,35 @@
   .consent{font-size:12.5px;color:var(--ink-faint);margin:20px 4px 0;line-height:1.5;border-top:.5px solid var(--line);padding-top:15px}
   .foot{font-size:12px;color:var(--ink-faint);margin-top:18px}
   .foot a{color:var(--ink-soft)}
+
+  /* ── the shared photo: the gift itself, carried in the moment ── */
+  .photo{position:relative;width:100%;border-radius:15px;margin:16px 0 2px;display:block;object-fit:cover;
+    max-height:320px;background:rgba(22,20,18,.04);box-shadow:var(--shadow-sm)}
+
+  /* ── reaction bar: a reply is the whole action — no form, no login ── */
+  .reacts{display:flex;gap:9px;margin:4px 0 2px}
+  .react{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--ink);background:var(--card);
+    border:1px solid var(--line);border-radius:15px;padding:14px 6px;cursor:pointer;transition:transform .1s,background .15s;box-shadow:var(--shadow-sm)}
+  .react:active{transform:translateY(1px);background:rgba(22,20,18,.04)}
+  .react svg{width:21px;height:21px;flex:0 0 auto}
+  .react.primary{flex:1.5;color:#fff;background:var(--ink);border-color:var(--ink)}
+  .react.primary:active{background:#2a2622}
+  .react.heart svg{color:var(--rose,#e5484d)}
+  .react[disabled]{opacity:.5;pointer-events:none}
+  .gifthead{font-family:var(--serif);font-weight:600;font-size:22px;line-height:1.2;letter-spacing:-.01em;margin:24px 4px 7px}
+  .giftsub{font-size:14px;color:var(--ink-soft);margin:0 8px 18px;line-height:1.5}
+  .giftsub b{color:var(--ink);font-weight:600}
+  /* warm confirmation after a tap — the moment lands, nothing demanded */
+  .done{display:none;animation:rise .4s ease both;background:rgba(52,199,89,.07);border:1px solid rgba(52,199,89,.22);
+    border-radius:15px;padding:15px 16px;margin:4px 0 2px}
+  .done .dt{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--ink)}
+  .done .dd{font-size:13px;color:var(--ink-soft);margin-top:3px;line-height:1.45}
+  /* save reveal: the page + your own agent, offered only after Save — opt-in, never required */
+  .reveal{display:none;margin-top:16px;animation:rise .45s ease both}
+  .reveal.on{display:block}
+  .remove{display:inline-block;margin-top:14px;font-size:12px;color:var(--ink-faint);text-decoration:underline;
+    text-underline-offset:2px;background:none;border:0;cursor:pointer;font-family:var(--sans)}
 </style>
 </head>
 <body>
@@ -117,7 +146,8 @@
 
     <!-- we-met card hero: the moment, carried forward -->
     <div class="met">
-      <div class="eyebrow">We met</div>
+      <div class="eyebrow" id="eyebrow">A moment with you</div>
+      <img class="photo" id="photo" style="display:none" alt="The moment you met">
       <div class="faces">
         <div class="av" id="avA">?</div>
         <div class="amp">&times;</div>
@@ -148,23 +178,36 @@
       <button class="savebtn" id="saveSender" type="button" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg><span>Save <span id="saveName">them</span> to contacts</span></button>
     </div>
 
-    <h1 id="head">Claim your page.</h1>
-    <p class="lede" id="lede">You were added on HiRey. Claim the page people reach when they look you up.</p>
+    <h1 class="gifthead" id="gifthead">A moment with you.</h1>
+    <p class="giftsub" id="giftsub"><b>Someone</b> shared this from when you met. A reply is all it takes — no form, no sign-up.</p>
 
-    <!-- the reward: a preview of their own agent-readable page -->
-    <div class="prev">
-      <div class="tag">🤖 Agent-readable</div>
-      <div class="prow">
-        <div class="pav" id="pav">?</div>
-        <div class="pmeta"><b id="pname">Your name</b><span>＋ add what you do</span></div>
-      </div>
-      <div class="chips"><span class="chip">＋ X</span><span class="chip">＋ Website</span><span class="chip">＋ Anything</span></div>
-      <div class="areadable"><span class="d"></span><span>An AI assistant reads this page directly — it can <b style="color:var(--ink);font-weight:600">find, cite, and reach you</b> here. No LinkedIn wall, no click-through.</span></div>
+    <!-- reaction bar: the reply IS the action (captured here, on the page) -->
+    <div class="reacts" id="reacts">
+      <button class="react heart" id="rLove" type="button" data-r="love"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.6-10-9.2C.6 9 1.6 5.5 4.8 5 7 4.7 8.8 6 12 9c3.2-3 5-4.3 7.2-4 3.2.5 4.2 4 2.8 6.8C19.5 16.4 12 21 12 21z"/></svg>Love it</button>
+      <button class="react primary" id="rReply" type="button" data-r="reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Great meeting you</button>
+      <button class="react" id="rSave" type="button" data-r="save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Save</button>
     </div>
-    <p class="caption" id="cap">Yours the moment you claim — a page exactly like theirs above. Add your links once; everyone, and every agent, finds you here.</p>
 
-    <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Claim your page</a>
-    <p class="sub">Text <b>“hi”</b> — your agent does the rest. ~30 seconds.<br>Or text <span class="num">hi</span> to <span class="num">+1 (916) 999-9971</span>.</p>
+    <!-- warm confirmation — nothing demanded -->
+    <div class="done" id="done"><div class="dt" id="doneT">Sent.</div><div class="dd" id="doneD"></div></div>
+
+    <!-- save reveal: your page + your own Hi, offered only after Save (opt-in, never required) -->
+    <div class="reveal" id="reveal">
+      <p class="giftsub" id="revsub">Keep this — and get your own page, so people and their agents can find you too. It’s free.</p>
+      <div class="prev">
+        <div class="tag">🤖 Agent-readable</div>
+        <div class="prow">
+          <div class="pav" id="pav">?</div>
+          <div class="pmeta"><b id="pname">Your name</b><span>＋ add what you do</span></div>
+        </div>
+        <div class="chips"><span class="chip">＋ X</span><span class="chip">＋ Website</span><span class="chip">＋ Anything</span></div>
+        <div class="areadable"><span class="d"></span><span>An AI assistant reads this page directly — it can <b style="color:var(--ink);font-weight:600">find, cite, and reach you</b> here. No LinkedIn wall, no click-through.</span></div>
+      </div>
+      <a class="cta" id="cta" href="sms:+19169999971?&body=hi">Save it to your page</a>
+      <p class="sub">Text <b>“hi”</b> — your Hi sets it up. ~30 seconds.<br>Or text <span class="num">hi</span> to <span class="num">+1 (916) 999-9971</span>.</p>
+    </div>
+
+    <button class="remove" id="remove" type="button">Not you, or rather not be shown? Remove this.</button>
 
     <p class="consent">You’re in control: you choose whether to claim, and you decide what’s public. No face recognition — you were named by the person who met you.</p>
     <p class="foot"><a href="https://hirey.ai">hirey.ai</a> · Let your agent find your people.</p>
@@ -283,30 +326,67 @@
     // snapshot is on screen; now pull the LIVE profile and upgrade in place
     hydrateLive(meUrl);
 
-    // claim copy
-    // intro mode = a standalone "here's my card" share (no specific recipient) — e.g. someone has your number days later and asks who you are
-    var introMode = q.get("intro")==="1" || !name;
-    if(introMode){
-      var metEl=document.querySelector(".met"); if(metEl) metEl.style.display="none";   // drop the recipient-specific "we met" hero
-      var lbl=document.querySelector("#sender .lbl"); if(lbl) lbl.textContent="HiRey card";
-      document.getElementById("head").textContent="Get your own HiRey card.";
-      document.getElementById("lede").innerHTML="This is "+(from?("<b>"+from+"</b>"):"someone")+" on HiRey — an agent-readable card people (and their agents) can read and save, no LinkedIn wall. Want one? It’s free.";
-      var ctaB=document.getElementById("cta"); if(ctaB) ctaB.textContent="Get your own card";
-    } else {
-      if(from){ document.getElementById("head").textContent=(firstName?firstName+", ":"")+"claim your page."; }
-      document.getElementById("lede").innerHTML=(from?("<b>"+from+"</b> "):"Someone ")+"met you and wants to stay connected. Claim the page people — and their agents — reach when they look you up. No LinkedIn wall.";
+    // ── the shared photo: the gift itself (a real moment, not a monogram) ──
+    var photoUrl=(q.get("photo")||"").trim();
+    if(/^https?:\/\//.test(photoUrl)){
+      var pim=document.getElementById("photo"), pt=new Image();
+      pt.onload=function(){ pim.src=photoUrl.replace(/[\s"'\\]/g,""); pim.style.display="block"; };
+      pt.src=photoUrl;
     }
 
-    // reward preview = their future page
+    // intro mode = a standalone "here's my card" share (no specific recipient)
+    var token=(q.get("t")||q.get("token")||"").trim();
+    var introMode = q.get("intro")==="1" || !name;
+    if(introMode){
+      var metEl=document.querySelector(".met"); if(metEl) metEl.style.display="none";
+      var lbl=document.querySelector("#sender .lbl"); if(lbl) lbl.textContent="HiRey card";
+      document.getElementById("gifthead").textContent="Get your own HiRey card.";
+      document.getElementById("giftsub").innerHTML="This is "+(from?("<b>"+from+"</b>"):"someone")+" on HiRey — an agent-readable card people (and their agents) can read and save. Want one? It’s free.";
+      document.getElementById("reacts").style.display="none";
+      document.getElementById("remove").style.display="none";
+      document.getElementById("revsub").style.display="none";
+      document.getElementById("reveal").classList.add("on");
+      document.getElementById("cta").textContent="Get your own card";
+    } else {
+      document.getElementById("giftsub").innerHTML=(from?("<b>"+from+"</b>"):"Someone")+" shared this from when you met. A reply is all it takes — no form, no sign-up.";
+    }
+
+    // reward preview (inside the Save reveal) = your future page
     var pav=document.getElementById("pav");
     pav.textContent=mono(name||"You"); pav.style.setProperty("--ring2",hue(name||"you"));
     document.getElementById("pname").textContent=name||"Your name";
 
-    // sms cta carries the name
+    // sms cta carries the name (the Save / page path — opt-in)
     var ua=navigator.userAgent||"";
     var smsBody="hi"+(name?(", I'm "+name):"");
     var sep=/android/i.test(ua)?"?":"?&";
     document.getElementById("cta").href="sms:+19169999971"+sep+"body="+encodeURIComponent(smsBody);
+
+    // ── the reply IS the edge: capture the reaction here, on the page (A cold-flow) ──
+    // Fire-and-forget to the platform; the warm confirmation shows regardless, so it never feels broken.
+    function react(kind, title, sub){
+      try{
+        if(token) fetch("/api/met/react",{method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({token:token,reaction:kind,from:from,name:name})}).catch(function(){});
+      }catch(e){}
+      var rs=document.getElementById("reacts");
+      Array.prototype.forEach.call(rs.querySelectorAll("button"),function(b){ b.disabled=true; });
+      document.getElementById("doneT").textContent=title;
+      document.getElementById("doneD").textContent=sub;
+      document.getElementById("done").style.display="block";
+    }
+    var who=from?from.split(" ")[0]:"They";
+    document.getElementById("rLove").onclick=function(){ react("love","Sent ❤", who+" will see you loved it."); };
+    document.getElementById("rReply").onclick=function(){ react("reply","Great meeting you too.", who+" gets your hello — you’re connected now."); };
+    document.getElementById("rSave").onclick=function(){
+      react("save","Saved.","Keep this moment — and your own page, just below.");
+      var rv=document.getElementById("reveal"); rv.classList.add("on");
+      rv.scrollIntoView({behavior:"smooth",block:"center"});
+    };
+    document.getElementById("remove").onclick=function(){
+      try{ if(token) fetch("/api/met/react",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token:token,reaction:"remove"})}).catch(function(){}); }catch(e){}
+      document.querySelector(".wrap").innerHTML="<div class='brand' style='justify-content:center'><span class='ld'></span>HiRey</div><p class='giftsub' style='margin-top:40px'>Removed. This won’t be shown, and you won’t be contacted. Thanks for letting us know.</p>";
+    };
   })();
 </script>
 </body>
