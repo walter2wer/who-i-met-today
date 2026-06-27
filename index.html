@@ -1479,7 +1479,7 @@ async function hiInvite(pid){
 async function invitePerson(pid){ const p=personById(pid); if(!p) return;
   const first=p.name.split(" ")[0];
   const url=claimURL(p);
-  const msg=first+", I met you today — claim your HiRey profile: "+url;
+  const msg=first+", great meeting you today — here's our card: "+url;
   const m=state.meetings.find(x=>x.personIds.includes(pid)&&x.photo);
   let sent=false;
   try{
@@ -1519,7 +1519,7 @@ async function makeCardBlob(meName, theirName, photoBlob, dateTs, accent){
 }
 async function shareCard(cardBlob, p, includeContact){ const first=p.name.split(" ")[0];
   const url=claimURL(p);
-  let text="Great meeting you, "+first+"! Here's our card — claim your own HiRey page (people and their agents find you there) and connect back: "+url;
+  let text="Great meeting you, "+first+"! Here's our card: "+url;
   const cardFile=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
   const files=[cardFile]; const share=includeContact&&hasMyContact();
   if(share){ try{ files.push(makeMyVCardFile()); }catch(_){} }
