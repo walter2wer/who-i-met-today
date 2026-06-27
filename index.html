@@ -113,7 +113,25 @@
   .card-vis{font-size:11px;font-weight:600;letter-spacing:.03em;border:0;border-radius:999px;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
   .card-vis svg{width:12px;height:12px}
   .card-vis.priv{background:rgba(22,20,18,.06);color:var(--ink-soft)}
+  span.card-vis.priv{cursor:default}
   .card-vis.pub{background:rgba(52,199,89,.14);color:#1d7c3e}
+  /* public/private picker in the capture sheet */
+  .vis-pick{display:flex;flex-direction:column;gap:9px;margin-top:9px}
+  .vis-opt{display:flex;align-items:center;gap:13px;width:100%;text-align:left;cursor:pointer;
+    background:var(--card);border:.5px solid var(--line-2);border-radius:15px;padding:13px 14px;font:inherit;color:var(--ink);transition:border .12s,box-shadow .12s,background .12s}
+  .vis-opt:active{transform:translateY(1px)}
+  .vis-opt .vi{width:34px;height:34px;border-radius:50%;background:rgba(22,20,18,.05);color:var(--ink-soft);display:grid;place-items:center;flex:0 0 auto}
+  .vis-opt .vi svg{width:17px;height:17px}
+  .vis-opt .vt{flex:1;min-width:0}
+  .vis-opt .vt b{font-size:14.5px;font-weight:600;display:block;line-height:1.25}
+  .vis-opt .vt small{font-size:12px;color:var(--ink-soft);display:block;margin-top:2px;line-height:1.35}
+  .vis-opt .vk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-2);flex:0 0 auto;position:relative;transition:border-color .12s}
+  .vis-opt.on{border-color:var(--ink);box-shadow:0 0 0 2.5px rgba(22,20,18,.07)}
+  .vis-opt.on .vk{border-color:var(--ink);background:var(--ink)}
+  .vis-opt.on .vk::after{content:"";position:absolute;left:6px;top:3px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .vis-opt.on[data-pub="1"] .vi{background:rgba(52,199,89,.16);color:#1d7c3e}
+  .vis-consent{font-size:12px;color:#8a5c00;background:rgba(209,138,0,.08);border:.5px solid rgba(209,138,0,.18);
+    border-radius:12px;padding:10px 13px;margin-top:10px;line-height:1.45;font-weight:500}
   .btn-mic{width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:9px;background:rgba(52,199,89,.12);color:#1d7c3e;border:0;border-radius:14px;padding:13px 16px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
   .btn-mic svg{width:19px;height:19px;flex:0 0 auto}
   .btn-mic:active{transform:translateY(1px)}
@@ -398,13 +416,20 @@ function hiConsentFor(p){ if(!p) return null; return HI.consent.get(p.nameLower|
 /* ========================= server-side photo sync (hi.owner-images) =========================
    Offline-first: the photo always lives in IndexedDB. When signed in, we ALSO push a
    copy to the user's OWN Hi owner-images so it survives a device change. Hard rules:
-   - PRIVATE by default. request_public_on_approve=false + feed_eligible=false →
-     even after AI moderation the image stays approved+private and never enters the
-     platform-wide discovery feed. Upload ≠ publish.
+   - PRIVATE by default. A moment is only ever public if the user EXPLICITLY chose
+     "Post to the public feed" at save time (meeting.hiPublic===true).
+   - Public/private is decided at UPLOAD time and cannot be changed afterward to ADD a
+     post to the feed:
+       request_public_on_approve:true  + feed_eligible:true → after AI approve the image
+                                          auto-goes public + enters the platform /met feed.
+       request_public_on_approve:false → stays private + review_status=pending forever;
+                                          a later set_visibility=public will NOT push it
+                                          into the feed. So a private post can never be
+                                          "promoted" to the feed after the fact.
+     => The public-vs-private choice is captured once, in the save sheet, and passed here.
    - This is the user's OWN photo (their post, like an IG post). No faceprints, no 1:N
      face search, no identity index — just bytes the user chose to keep in their account.
-   - Making a single post public is a separate, explicit action (setMeetingPublic).
-   Flow: presign_upload(kind:'post', is private) → S3 PUT → finalize_upload(image_id).
+   Flow: presign_upload(kind:'post') → S3 PUT → finalize_upload(image_id).
    The returned oi_xxx is written back onto the meeting record so we never re-upload. */
 function blobDims(blob){ return new Promise(res=>{ try{ const u=URL.createObjectURL(blob), img=new Image();
   img.onload=()=>{ const d={w:img.naturalWidth||0,h:img.naturalHeight||0}; URL.revokeObjectURL(u); res(d); };
@@ -412,23 +437,23 @@ function blobDims(blob){ return new Promise(res=>{ try{ const u=URL.createObject
 function mimeOf(blob){ const t=(blob&&blob.type||"").toLowerCase();
   return (t==="image/jpeg"||t==="image/png"||t==="image/webp"||t==="image/gif")?t:"image/jpeg"; }
 function extFor(mime){ return ({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"})[mime]||"jpg"; }
-// Upload one meeting's photo to the signed-in user's own Hi account, PRIVATE. Returns oi_xxx or null.
+// Upload one meeting's photo to the signed-in user's own Hi account. Returns oi_xxx or null.
+// Public vs private is decided ONCE here, from meeting.hiPublic (the choice made in the save
+// sheet). It cannot be changed afterward to ADD a post to the public feed.
 async function uploadMeetingPhoto(meeting){
   if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return meeting&&meeting.hiImageId||null;
   const blob=meeting.photo, mime=mimeOf(blob);
+  const wantPublic=!!meeting.hiPublic;   // default false → private diary only
   let dims={w:0,h:0}; try{ dims=await blobDims(blob); }catch(_){}
-  // 1) presign — PRIVATE on upload, but FEED-ELIGIBLE so the user can later choose to publish.
-  //    request_public_on_approve:false  → even after AI moderation it stays approved+PRIVATE.
-  //    feed_eligible:true               → eligibility is set ONCE here (owner_images has no
-  //                                        post-upload action to change it). It does NOT make the
-  //                                        post public — visibility=private keeps it out of the
-  //                                        feed. Only an explicit set_visibility=public (the
-  //                                        per-post "Make public" toggle) ever surfaces it, and
-  //                                        the platform-wide browse_feed shows public+eligible only.
+  // 1) presign — the public/private decision is LOCKED IN here:
+  //    request_public_on_approve:true  → after AI approve, auto-public + enters /met feed.
+  //    request_public_on_approve:false → stays private + pending; never reaches the feed,
+  //                                       and a later set_visibility=public won't change that.
+  //    feed_eligible:true only matters when public; harmless when private.
   const pre=await HI.call("hi.owner-images",{ action:"presign_upload", kind:"post",
     original_filename:"who-i-met-"+meeting.id+"."+extFor(mime), mime_type:mime,
     size_bytes:blob.size||undefined, width:dims.w||undefined, height:dims.h||undefined,
-    request_public_on_approve:false, feed_eligible:true });
+    request_public_on_approve:wantPublic, feed_eligible:wantPublic });
   const img=pre.image||pre, up=pre.upload||{};
   const imageId=img.id||img.image_id; const putUrl=up.url||up.upload_url||up.put_url;
   if(!imageId||!putUrl){ throw new Error("presign_missing_fields"); }
@@ -436,7 +461,9 @@ async function uploadMeetingPhoto(meeting){
   const headers=Object.assign({"content-type":mime}, up.required_headers||up.headers||{});
   const put=await fetch(putUrl,{ method:"PUT", body:blob, headers });
   if(!put.ok){ throw new Error("s3_put_"+put.status); }
-  // 3) finalize — Hi HEADs the object + runs AI pre-screen; result stays private.
+  // 3) finalize — Hi HEADs the object + runs AI moderation. If wantPublic and the AI
+  //    approves, the image auto-goes public + enters the /met feed within seconds. If
+  //    private, it stays private+pending. No staff action either way.
   await HI.call("hi.owner-images",{ action:"finalize_upload", image_id:imageId, reported_size_bytes:blob.size||undefined });
   return imageId;
 }
@@ -499,21 +526,21 @@ async function pullMyServerPosts(){
     });
   }
 }
-// Explicit, per-post publish toggle (the ONLY path to public). Never auto-called.
-// Because the image was uploaded feed_eligible:true, set_visibility=public is the single
-// action that moves it into the platform-wide public feed (/met → browse_feed). Setting it
-// back to private removes it from the feed again. (owner_images has no separate feed action,
-// so eligibility was decided at upload and visibility is the live on/off switch.)
-async function setMeetingPublic(meeting, makePublic){
+// Take an already-public post back to PRIVATE (unpublish). This is the only honest
+// post-upload visibility change: set_visibility=private genuinely removes the image from
+// the /met feed. The reverse (private→public) is NOT available here — a private post was
+// uploaded request_public_on_approve:false and can never be promoted into the feed after
+// the fact, so the public/private choice is made once at save time (see saveMoment).
+async function unpublishMeeting(meeting){
   if(!HI.authed() || !meeting || !meeting.hiImageId) return false;
   try{
     await HI.call("hi.owner-images",{ action:"set_visibility", image_id:meeting.hiImageId,
-      visibility_status:makePublic?"public":"private" });
-    meeting.hiPublic=!!makePublic;
+      visibility_status:"private" });
+    meeting.hiPublic=false;
     // Only local meetings persist to IndexedDB; remote pseudo-records are session-only (server is truth).
     if(!meeting.remote){ try{ await dbPut("meetings",meeting); }catch(_){} }
     return true;
-  }catch(e){ toast(e.message==="image_not_approved"?"Still in review — try again shortly":"Couldn't change visibility"); return false; }
+  }catch(e){ toast("Couldn't change visibility"); return false; }
 }
 
 /* ========================= state / helpers ========================= */
@@ -615,9 +642,34 @@ async function applyPendingHiLinks(){
 }
 
 /* ========================= capture sheet ========================= */
-let pending={ blob:null, url:"", names:[] };
-function openCaptureSheet(blob){ pending={ blob, url:URL.createObjectURL(blob), names:[] };
+// pending.makePublic = the explicit choice for THIS moment. Default false (private diary).
+// Only shown when signed in + the moment has a photo (the only thing that can ride the public feed).
+let pending={ blob:null, url:"", names:[], makePublic:false };
+function openCaptureSheet(blob){ pending={ blob, url:URL.createObjectURL(blob), names:[], makePublic:false };
   renderCaptureSheet(); showSheet("sheet","scrim"); setTimeout(()=>document.getElementById("nameInput")?.focus(),340); }
+// The post-vs-private picker. Public is an EXPLICIT opt-in (default private) and carries a
+// consent reminder, because every photo is a real person who must agree to be shown publicly.
+function visPickerHTML(){
+  if(!HI.authed() || pending.retag || !pending.blob) return "";   // public feed needs sign-in + a photo; not on retag
+  const pub=!!pending.makePublic;
+  const GLOBE=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`;
+  const LOCK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+  return `
+    <div class="field-label" style="margin-top:20px">Where does this go?</div>
+    <div class="vis-pick" id="visPick">
+      <button type="button" class="vis-opt ${pub?"":"on"}" data-pub="0">
+        <span class="vi">${LOCK}</span>
+        <span class="vt"><b>Keep private — just for me</b><small>Only in your diary on this device &amp; your account.</small></span>
+        <span class="vk"></span>
+      </button>
+      <button type="button" class="vis-opt ${pub?"on":""}" data-pub="1">
+        <span class="vi">${GLOBE}</span>
+        <span class="vt"><b>Post to the public feed</b><small>Appears on /met for everyone after a quick review.</small></span>
+        <span class="vk"></span>
+      </button>
+    </div>
+    <div class="vis-consent ${pub?"":"hidden"}" id="visConsent">Public means everyone can see it. Only post with the consent of everyone pictured — each photo is a real person.</div>`;
+}
 function renderCaptureSheet(){
   document.getElementById("sheet").innerHTML=`
     <div class="grip"></div>
@@ -630,6 +682,7 @@ function renderCaptureSheet(){
     <div class="suggest" id="nameSuggest"></div>
     <div class="field-label" style="margin-top:20px">Note &mdash; optional</div>
     <input type="text" id="capNote" placeholder="coffee @ Ritual, talked about the seed round" autocomplete="off">
+    ${visPickerHTML()}
     <div class="sheet-actions">
       <button class="btn btn-ghost" id="capSaveOnly">Just save</button>
       <button class="btn btn-primary" id="capSave">Send card &rarr;</button>
@@ -638,9 +691,19 @@ function renderCaptureSheet(){
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addName(input.value); input.value=""; }});
   wireNameInput(input, document.getElementById("nameSuggest"), addName);
   const nMic=document.getElementById("nameMic"); if(nMic) nMic.onclick=dictateName;
+  wireVisPicker();
   document.querySelectorAll("#added .tag").forEach(c=>c.onclick=()=>{ pending.names=pending.names.filter(n=>n!==c.dataset.n); renderCaptureSheet(); });
   document.getElementById("capSaveOnly").onclick=()=>saveMoment(false);
   document.getElementById("capSave").onclick=()=>saveMoment(true);
+}
+// Wire the public/private picker without re-rendering the whole sheet (keeps name input focus/text).
+function wireVisPicker(){
+  const pick=document.getElementById("visPick"); if(!pick) return;
+  pick.querySelectorAll(".vis-opt").forEach(b=>b.onclick=()=>{
+    pending.makePublic=b.dataset.pub==="1";
+    pick.querySelectorAll(".vis-opt").forEach(o=>o.classList.toggle("on",(o.dataset.pub==="1")===pending.makePublic));
+    document.getElementById("visConsent")?.classList.toggle("hidden",!pending.makePublic);
+  });
 }
 function addName(v, hi){ const n=(v||"").trim(); if(!n) return; if(!pending.names.some(x=>norm(x)===norm(n))) pending.names.push(n);
   if(hi){ (pending.hi||(pending.hi={}))[norm(n)]=hi; }
@@ -659,24 +722,29 @@ function dictateName(){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_){ ret
       const note=document.getElementById("capNote"); if(note&&rest.length>2&&!note.value.trim()) note.value=rest;
     } else { addName(v); } };
   try{ r2.start(); }catch(_){ if(btn) btn.classList.remove("live"); } }
-function closeCaptureSheet(){ if(typeof stopRec==="function") stopRec(); hideSheet("sheet","scrim"); if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]}; }
+function closeCaptureSheet(){ if(typeof stopRec==="function") stopRec(); hideSheet("sheet","scrim"); if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[],makePublic:false}; }
 async function saveMoment(shareAfter){
   const note=document.getElementById("capNote").value.trim();
   const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
   const blob=pending.blob;
+  // The public/private choice, locked in BEFORE upload (can't be promoted to feed later).
+  // Only photos can be public; a no-photo voice note never goes to the feed.
+  const wantPublic=!!(pending.makePublic && blob && HI.authed());
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
   await applyPendingHiLinks();
-  const meeting={ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids };
+  const meeting={ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids, hiPublic:wantPublic };
   await dbPut("meetings",meeting);
-  if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]};
+  if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[],makePublic:false};
   await loadAll(); renderAll(); switchView("today");
-  // Offline-first: local save already done above. If signed in + has a photo, push a PRIVATE
-  // copy to the user's own Hi account in the background — failure never blocks the save.
+  // Offline-first: local save already done above. If signed in + has a photo, push the copy to
+  // the user's own Hi account in the background, public or private per the choice above —
+  // failure never blocks the save.
   if(HI.authed() && blob) syncMeetingToHi(meeting);
   if(shareAfter && ids.length){ await presentCard(ids[0], {sheet:"sheet",scrim:"scrim",backLabel:"Done",onBack:()=>hideSheet("sheet","scrim")}); }
   else { hideSheet("sheet","scrim");
     if(!HI.authed() && blob) toast("Saved here — sign in to sync to the cloud & keep it across devices");
-    else toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); }
+    else if(wantPublic) toast("Saved — posts to the public feed once it clears review");
+    else toast(ids.length?`Saved privately — met ${ids.map(i=>personById(i).name).join(", ")}`:"Saved privately"); }
 }
 
 /* ========================= person detail ========================= */
@@ -837,11 +905,16 @@ function meetingCardHTML(m,i=0){
     :(isRemote?`<span class="chip" style="color:var(--ink-faint);font-style:italic">From your HiRey account</span>`
               :`<span class="chip add">+ add a name</span>`);
   // Visibility pill: shown once the photo is on Hi (has an oi_xxx) — works for both local-synced
-  // and remote posts. Default state = private.
+  // and remote posts. PUBLIC posts get a tappable pill (tap → back to private/unpublish, which
+  // genuinely removes it from the feed). PRIVATE posts get a non-interactive label: a private
+  // post can't be promoted into the feed after the fact, so we don't pretend it can — going
+  // public is chosen when you save the moment.
   const LOCK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
   const GLOBE=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`;
   const visBtn=(HI.authed()&&m.hiImageId)
-    ? `<button class="card-vis ${m.hiPublic?"pub":"priv"}" data-mid="${m.id}" title="${m.hiPublic?"Public — tap to make private":"Private — only you. Tap to make public."}">${m.hiPublic?GLOBE+"Public":LOCK+"Private"}</button>`
+    ? (m.hiPublic
+        ? `<button class="card-vis pub" data-mid="${m.id}" title="Public — tap to make private (removes it from the feed)">${GLOBE}Public</button>`
+        : `<span class="card-vis priv" title="Private — only you. To post publicly, choose “Post to the public feed” when you save a moment.">${LOCK}Private</span>`)
     : "";
   const photo=photoURL(m);
   return `<div class="card" data-mid="${m.id}" style="animation-delay:${i*45}ms">
@@ -856,21 +929,25 @@ function wireCards(root){
   root.querySelectorAll(".chip[data-pid]").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
   root.querySelectorAll(".chip.add").forEach(c=>c.onclick=()=>retag(c.closest(".card").dataset.mid));
   root.querySelectorAll(".card-share").forEach(b=>b.onclick=e=>{ e.stopPropagation(); shareFromCard(b.dataset.mid); });
-  root.querySelectorAll(".card-vis").forEach(b=>b.onclick=e=>{ e.stopPropagation(); toggleMeetingVisibility(b.dataset.mid); });
+  // Only PUBLIC pills are <button>s (private pills are inert <span>s) — tapping one unpublishes.
+  root.querySelectorAll("button.card-vis").forEach(b=>b.onclick=e=>{ e.stopPropagation(); makeMeetingPrivate(b.dataset.mid); });
 }
-async function toggleMeetingVisibility(mid){
-  const m=findCard(mid); if(!m||!m.hiImageId) return;
-  const makePublic=!m.hiPublic;
-  // Publishing a photo of someone you met is an explicit, consented act — confirm it.
-  if(makePublic && !confirm("Submit this to the public Who I Met feed?\n\nIt shows up on /met for everyone once it's been reviewed — not instantly. Only do this with the consent of everyone pictured — each photo is a real person. You can switch it back to private anytime.")) return;
-  const ok=await setMeetingPublic(m, makePublic);
-  if(ok){ renderAll(); toast(makePublic?"Submitted — it appears in the public feed after review. Tap again for private.":"Back to private — only you"); }
+// Tap on a Public pill → take it private again (remove from the /met feed). The reverse
+// (private → public) is intentionally NOT offered here: a private post can't be promoted to
+// the feed after upload, so public is chosen at save time, not toggled here.
+async function makeMeetingPrivate(mid){
+  const m=findCard(mid); if(!m||!m.hiImageId||!m.hiPublic) return;
+  if(!confirm("Make this private?\n\nIt will be removed from the public /met feed and visible only to you.")) return;
+  const ok=await unpublishMeeting(m);
+  if(ok){ renderAll(); toast("Back to private — only you"); }
 }
 function shareFromCard(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m||!m.personIds.length) return;
   showSheet("sheet2","scrim2");
   presentCard(m.personIds[0], {sheet:"sheet2",scrim:"scrim2",backLabel:"Done",onBack:()=>hideSheet("sheet2","scrim2")}); }
 function retag(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m) return;
-  pending={ blob:m.photo, url:m.photo?URL.createObjectURL(m.photo):"", names:[] };
+  // Retag only edits names/note — visibility was already decided at the original save, so
+  // the public/private picker is suppressed here (pending.retag).
+  pending={ blob:m.photo, url:m.photo?URL.createObjectURL(m.photo):"", names:[], makePublic:false, retag:true };
   renderCaptureSheet(); showSheet("sheet","scrim");
   document.getElementById("capSave").onclick=async()=>{
     const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
