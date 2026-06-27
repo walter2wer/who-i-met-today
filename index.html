@@ -109,6 +109,11 @@
   .card-share{font-size:12.5px;font-weight:600;color:#fff;background:var(--ink);border:0;border-radius:999px;padding:8px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--shadow-sm)}
   .card-share svg{width:15px;height:15px}
   .card-share:active{transform:translateY(1px)}
+  /* per-post visibility — synced photos are PRIVATE by default; this is the only path to public */
+  .card-vis{font-size:11px;font-weight:600;letter-spacing:.03em;border:0;border-radius:999px;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .card-vis svg{width:12px;height:12px}
+  .card-vis.priv{background:rgba(22,20,18,.06);color:var(--ink-soft)}
+  .card-vis.pub{background:rgba(52,199,89,.14);color:#1d7c3e}
   .btn-mic{width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:9px;background:rgba(52,199,89,.12);color:#1d7c3e;border:0;border-radius:14px;padding:13px 16px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
   .btn-mic svg{width:19px;height:19px;flex:0 0 auto}
   .btn-mic:active{transform:translateY(1px)}
@@ -390,6 +395,69 @@ async function hiRefreshConsent(){ if(!HI.authed()) return;
   }catch(_){} }
 function hiConsentFor(p){ if(!p) return null; return HI.consent.get(p.nameLower||norm(p.name))||null; }
 
+/* ========================= server-side photo sync (hi.owner-images) =========================
+   Offline-first: the photo always lives in IndexedDB. When signed in, we ALSO push a
+   copy to the user's OWN Hi owner-images so it survives a device change. Hard rules:
+   - PRIVATE by default. request_public_on_approve=false + feed_eligible=false →
+     even after AI moderation the image stays approved+private and never enters the
+     platform-wide discovery feed. Upload ≠ publish.
+   - This is the user's OWN photo (their post, like an IG post). No faceprints, no 1:N
+     face search, no identity index — just bytes the user chose to keep in their account.
+   - Making a single post public is a separate, explicit action (setMeetingPublic).
+   Flow: presign_upload(kind:'post', is private) → S3 PUT → finalize_upload(image_id).
+   The returned oi_xxx is written back onto the meeting record so we never re-upload. */
+function blobDims(blob){ return new Promise(res=>{ try{ const u=URL.createObjectURL(blob), img=new Image();
+  img.onload=()=>{ const d={w:img.naturalWidth||0,h:img.naturalHeight||0}; URL.revokeObjectURL(u); res(d); };
+  img.onerror=()=>{ URL.revokeObjectURL(u); res({w:0,h:0}); }; img.src=u; }catch(_){ res({w:0,h:0}); } }); }
+function mimeOf(blob){ const t=(blob&&blob.type||"").toLowerCase();
+  return (t==="image/jpeg"||t==="image/png"||t==="image/webp"||t==="image/gif")?t:"image/jpeg"; }
+function extFor(mime){ return ({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"})[mime]||"jpg"; }
+// Upload one meeting's photo to the signed-in user's own Hi account, PRIVATE. Returns oi_xxx or null.
+async function uploadMeetingPhoto(meeting){
+  if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return meeting&&meeting.hiImageId||null;
+  const blob=meeting.photo, mime=mimeOf(blob);
+  let dims={w:0,h:0}; try{ dims=await blobDims(blob); }catch(_){}
+  // 1) presign — PRIVATE: never auto-public, never feed-eligible.
+  const pre=await HI.call("hi.owner-images",{ action:"presign_upload", kind:"post",
+    original_filename:"who-i-met-"+meeting.id+"."+extFor(mime), mime_type:mime,
+    size_bytes:blob.size||undefined, width:dims.w||undefined, height:dims.h||undefined,
+    request_public_on_approve:false, feed_eligible:false });
+  const img=pre.image||pre, up=pre.upload||{};
+  const imageId=img.id||img.image_id; const putUrl=up.url||up.upload_url||up.put_url;
+  if(!imageId||!putUrl){ throw new Error("presign_missing_fields"); }
+  // 2) PUT bytes straight to S3 with exactly the headers Hi told us to use.
+  const headers=Object.assign({"content-type":mime}, up.required_headers||up.headers||{});
+  const put=await fetch(putUrl,{ method:"PUT", body:blob, headers });
+  if(!put.ok){ throw new Error("s3_put_"+put.status); }
+  // 3) finalize — Hi HEADs the object + runs AI pre-screen; result stays private.
+  await HI.call("hi.owner-images",{ action:"finalize_upload", image_id:imageId, reported_size_bytes:blob.size||undefined });
+  return imageId;
+}
+// Fire-and-forget after a local save: never blocks, never throws to the caller.
+async function syncMeetingToHi(meeting){
+  if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return;
+  try{
+    const id=await uploadMeetingPhoto(meeting);
+    if(id){ meeting.hiImageId=id; meeting.hiSyncedAt=Date.now();
+      try{ await dbPut("meetings",meeting); }catch(_){} }
+  }catch(e){ /* offline / transient — local copy is intact, retried on next save or via syncPendingPhotos */ }
+}
+// Best-effort backfill: push any signed-in user's local photos that aren't on the server yet.
+async function syncPendingPhotos(){
+  if(!HI.authed()) return;
+  for(const m of state.meetings){ if(m.photo && !m.hiImageId){ await syncMeetingToHi(m); } }
+}
+// Explicit, per-post publish toggle (the ONLY path to public). Never auto-called.
+async function setMeetingPublic(meeting, makePublic){
+  if(!HI.authed() || !meeting || !meeting.hiImageId) return false;
+  try{
+    await HI.call("hi.owner-images",{ action:"set_visibility", image_id:meeting.hiImageId,
+      visibility_status:makePublic?"public":"private" });
+    meeting.hiPublic=!!makePublic; try{ await dbPut("meetings",meeting); }catch(_){}
+    return true;
+  }catch(e){ toast(e.message==="image_not_approved"?"Still in review — try again shortly":"Couldn't change visibility"); return false; }
+}
+
 /* ========================= state / helpers ========================= */
 const state={ people:[], meetings:[], urls:new Map() };
 const uid=()=>(Date.now().toString(36)+Math.random().toString(36).slice(2,8));
@@ -536,11 +604,17 @@ async function saveMoment(shareAfter){
   const blob=pending.blob;
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
   await applyPendingHiLinks();
-  await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids });
+  const meeting={ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids };
+  await dbPut("meetings",meeting);
   if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[]};
   await loadAll(); renderAll(); switchView("today");
+  // Offline-first: local save already done above. If signed in + has a photo, push a PRIVATE
+  // copy to the user's own Hi account in the background — failure never blocks the save.
+  if(HI.authed() && blob) syncMeetingToHi(meeting);
   if(shareAfter && ids.length){ await presentCard(ids[0], {sheet:"sheet",scrim:"scrim",backLabel:"Done",onBack:()=>hideSheet("sheet","scrim")}); }
-  else { hideSheet("sheet","scrim"); toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); }
+  else { hideSheet("sheet","scrim");
+    if(!HI.authed() && blob) toast("Saved here — sign in to sync to the cloud & keep it across devices");
+    else toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); }
 }
 
 /* ========================= person detail ========================= */
@@ -696,16 +770,31 @@ function meetingCardHTML(m,i=0){
   const ppl=m.personIds.map(id=>personById(id)).filter(Boolean);
   const chips=ppl.length?ppl.map(p=>`<span class="chip" data-pid="${p.id}"><span class="pd" style="background:${pcolor(p.name).a}"></span>${esc(p.name)}</span>`).join("")
     :`<span class="chip add">+ add a name</span>`;
+  // Visibility pill: only once the photo is synced to Hi (has an oi_xxx). Default state = private.
+  const LOCK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+  const GLOBE=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`;
+  const visBtn=(HI.authed()&&m.hiImageId)
+    ? `<button class="card-vis ${m.hiPublic?"pub":"priv"}" data-mid="${m.id}" title="${m.hiPublic?"Public — tap to make private":"Private — only you. Tap to make public."}">${m.hiPublic?GLOBE+"Public":LOCK+"Private"}</button>`
+    : "";
   return `<div class="card" data-mid="${m.id}" style="animation-delay:${i*45}ms">
     ${m.photo?`<img class="ph" src="${photoURL(m)}" loading="lazy">`:""}
     <div class="body"><div class="who">${chips}</div>
     ${m.caption?`<div class="cap">${esc(m.caption)}</div>`:""}
-    <div class="meta-row"><span class="meta">${timeStr(m.createdAt)}</span>${ppl.length?`<button class="card-share" data-mid="${m.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Send card</button>`:""}</div></div></div>`;
+    <div class="meta-row"><span class="meta">${timeStr(m.createdAt)}</span><span style="display:inline-flex;gap:8px;align-items:center">${visBtn}${ppl.length?`<button class="card-share" data-mid="${m.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>Send card</button>`:""}</span></div></div></div>`;
 }
 function wireCards(root){
   root.querySelectorAll(".chip[data-pid]").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
   root.querySelectorAll(".chip.add").forEach(c=>c.onclick=()=>retag(c.closest(".card").dataset.mid));
   root.querySelectorAll(".card-share").forEach(b=>b.onclick=e=>{ e.stopPropagation(); shareFromCard(b.dataset.mid); });
+  root.querySelectorAll(".card-vis").forEach(b=>b.onclick=e=>{ e.stopPropagation(); toggleMeetingVisibility(b.dataset.mid); });
+}
+async function toggleMeetingVisibility(mid){
+  const m=state.meetings.find(x=>x.id===mid); if(!m||!m.hiImageId) return;
+  const makePublic=!m.hiPublic;
+  // Publishing a photo of someone you met is an explicit, consented act — confirm it.
+  if(makePublic && !confirm("Make this photo public on HiRey?\n\nOnly do this with the consent of anyone pictured. You can switch it back to private anytime.")) return;
+  const ok=await setMeetingPublic(m, makePublic);
+  if(ok){ renderAll(); toast(makePublic?"Now public — tap again to make private":"Back to private — only you"); }
 }
 function shareFromCard(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m||!m.personIds.length) return;
   showSheet("sheet2","scrim2");
@@ -836,7 +925,7 @@ async function saveVoiceMoment(shareAfter){
   else { hideSheet("sheet","scrim"); toast(ids.length?`Saved — met ${ids.map(i=>personById(i).name).join(", ")}`:"Moment saved"); } }
 
 /* ========================= invite / claim ========================= */
-const CLAIM_BASE="https://walter2wer.github.io/who-i-met-today/claim/";
+const CLAIM_BASE="https://hirey.ai/met/claim";
 function getMyName(){ return (HI.myName()||localStorage.getItem("wim_my_name")||"").trim()||"A friend"; }
 function myLinktree(){ return (HI.profile&&HI.profile.owner_public_url)||((HI.session()||{}).owner_public_url)||""; }
 function myAvatar(){ var a=(HI.profile&&(HI.profile.avatar||HI.profile.avatar_url||HI.profile.avatar_thumb_url))||"";
@@ -1084,6 +1173,8 @@ async function finishAuth(tok){
   hideSheet("sheet","scrim"); renderAll(); updateMe();
   const nm=HI.myName(); toast(nm?("Signed in — welcome, "+nm.split(" ")[0]):"Signed in to HiRey");
   if(!HI.myName()) hiProfileEditor();
+  // Backfill: push any photos saved on this device before sign-in to the user's own Hi account (private).
+  syncPendingPhotos();
 }
 function hiProfileEditor(){
   const p=HI.profile||{};

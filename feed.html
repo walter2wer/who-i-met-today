@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#fbfaf7">
+<meta name="color-scheme" content="light">
+<title>The Feed · Who I Met · HiRey</title>
+<style>
+  :root{
+    --ink:#161412; --ink-soft:rgba(22,20,18,.62); --ink-faint:rgba(22,20,18,.42);
+    --gold:#d18a00; --blue:#2467e8; --green:#34c759; --purple:#7c4dff; --rose:#e8592f;
+    --paper:#fbfaf7; --card:#ffffff; --line:rgba(22,20,18,.10); --line-2:rgba(22,20,18,.16);
+    --shadow:0 18px 48px rgba(20,18,16,.18); --shadow-sm:0 8px 22px rgba(20,18,16,.12);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    --nav-h:60px; --max:480px; color-scheme:light;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;line-height:1.5}
+  ::selection{background:var(--ink);color:var(--paper)}
+  button{font-family:inherit}
+  #app{max-width:var(--max);margin:0 auto;min-height:100vh;background:var(--paper);
+    padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 28px)}
+  @keyframes livedot{0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,.5)}50%{box-shadow:0 0 0 5px rgba(52,199,89,.05)}}
+  @keyframes cardin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.32)}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+  /* ---------- header ---------- */
+  header{position:sticky;top:0;z-index:30;background:rgba(251,250,247,.82);
+    backdrop-filter:saturate(160%) blur(12px);-webkit-backdrop-filter:saturate(160%) blur(12px);
+    border-bottom:.5px solid var(--line);padding:calc(env(safe-area-inset-top) + 13px) 18px 11px;
+    display:flex;align-items:center;gap:12px}
+  .brand .t{font-family:var(--serif);font-size:21px;font-weight:600;letter-spacing:-.01em;
+    line-height:1;display:flex;align-items:center;gap:8px}
+  .brand .t .ld{width:8px;height:8px;border-radius:50%;background:var(--green);animation:livedot 2.4s infinite}
+  .brand .sub{font-size:11.5px;color:var(--ink-faint);margin-top:5px;font-weight:500;letter-spacing:.01em}
+  .hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .hdr-count{text-align:right;font-size:11px;color:var(--ink-soft);line-height:1.15;font-weight:500;text-transform:uppercase;letter-spacing:.08em}
+  .hdr-count b{font-family:var(--serif);font-size:18px;color:var(--ink);font-weight:600;display:block;letter-spacing:0;text-transform:none}
+  .add-btn{width:42px;height:42px;border-radius:50%;background:var(--ink);color:#fff;border:0;
+    display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .12s}
+  .add-btn:active{transform:scale(.92)}
+  .add-btn svg{width:20px;height:20px}
+
+  /* ---------- masthead ---------- */
+  .masthead{padding:20px 18px 4px}
+  .masthead h1{font-family:var(--serif);font-size:30px;font-weight:600;letter-spacing:-.015em;margin:0;line-height:1.05}
+  .masthead h1 em{font-style:italic;color:var(--rose)}
+  .masthead p{font-size:13.5px;color:var(--ink-soft);margin:9px 0 0;line-height:1.5;font-weight:500;max-width:340px}
+
+  /* filter pills */
+  .filters{display:flex;gap:8px;overflow-x:auto;padding:16px 18px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .filters::-webkit-scrollbar{display:none}
+  .pill{flex:0 0 auto;font-size:13px;font-weight:600;padding:8px 15px;border-radius:999px;cursor:pointer;
+    border:.5px solid var(--line);background:var(--card);color:var(--ink-soft);box-shadow:var(--shadow-sm);
+    transition:transform .1s, background .15s, color .15s;white-space:nowrap}
+  .pill:active{transform:scale(.95)}
+  .pill.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pill .n{opacity:.55;font-weight:600;margin-left:5px}
+
+  main{padding:4px 18px 24px}
+
+  /* day divider */
+  .day-label{display:flex;align-items:center;gap:12px;margin:18px 2px 16px}
+  .day-label .d{font-family:var(--serif);font-style:italic;font-size:17px;font-weight:500;white-space:nowrap}
+  .day-label .c{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);white-space:nowrap;font-weight:600}
+  .day-label::after{content:"";flex:1;height:.5px;background:var(--line)}
+
+  /* ---------- post card ---------- */
+  .post{background:var(--card);border-radius:20px;box-shadow:var(--shadow-sm);overflow:hidden;
+    margin-bottom:18px;animation:cardin .5s cubic-bezier(.2,.8,.2,1) both}
+  .post-top{display:flex;align-items:center;gap:11px;padding:13px 15px 12px}
+  .ava{width:38px;height:38px;border-radius:50%;object-fit:cover;background:#efe9dd;flex:0 0 auto;display:block}
+  .ava-fb{display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:16px;color:#fff}
+  .by{min-width:0;flex:1}
+  .by .l1{font-size:14px;line-height:1.25;color:var(--ink-soft);font-weight:500}
+  .by .l1 b{font-family:var(--serif);font-size:15.5px;font-weight:600;color:var(--ink);letter-spacing:-.005em}
+  .by .l2{font-size:11px;color:var(--ink-faint);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+    display:flex;align-items:center;gap:6px}
+  .by .l2 .dotsep{width:2.5px;height:2.5px;border-radius:50%;background:var(--ink-faint);opacity:.6}
+  .more{margin-left:auto;width:30px;height:30px;border:0;background:none;color:var(--ink-faint);cursor:pointer;
+    border-radius:50%;display:grid;place-items:center;flex:0 0 auto}
+  .more:active{background:rgba(22,20,18,.06)}
+  .more svg{width:18px;height:18px}
+
+  /* photo */
+  .photo-wrap{position:relative;background:#f0ece2;aspect-ratio:4/5;overflow:hidden}
+  .photo{width:100%;height:100%;object-fit:cover;display:block}
+  .photo-fb{width:100%;height:100%;display:grid;place-items:center;font-family:var(--serif);
+    font-weight:600;font-size:64px;color:rgba(255,255,255,.92)}
+  .photo-grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.02) 0%,rgba(0,0,0,0) 28%,rgba(0,0,0,0) 60%,rgba(20,12,8,.5) 100%);pointer-events:none}
+  video.photo{background:#16120f}
+  /* video chrome */
+  .vbadge{position:absolute;top:11px;right:11px;z-index:3;display:inline-flex;align-items:center;gap:5px;
+    font-size:11.5px;font-weight:700;letter-spacing:.02em;color:#fff;padding:5px 9px 5px 8px;border-radius:999px;
+    background:rgba(20,12,8,.42);backdrop-filter:blur(8px) saturate(140%);-webkit-backdrop-filter:blur(8px) saturate(140%)}
+  .vbadge svg{width:9px;height:9px;fill:#fff}
+  .vsound{position:absolute;bottom:12px;right:12px;z-index:4;width:34px;height:34px;border-radius:50%;border:0;cursor:pointer;
+    display:grid;place-items:center;color:#fff;background:rgba(20,12,8,.42);backdrop-filter:blur(8px) saturate(140%);-webkit-backdrop-filter:blur(8px) saturate(140%);transition:transform .1s}
+  .vsound:active{transform:scale(.9)}
+  .vsound svg{width:17px;height:17px}
+  .photo-wrap.is-video .plates{right:56px}
+  /* name plates on photo */
+  .plates{position:absolute;left:12px;bottom:12px;right:12px;display:flex;flex-wrap:wrap;gap:7px;z-index:2}
+  .plate{display:inline-flex;align-items:center;gap:8px;padding:7px 11px 7px 9px;border-radius:999px;
+    background:rgba(255,255,255,.86);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
+    box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:100%}
+  .plate .nm{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--ink);line-height:1.1;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .plate .pd{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .plate .vf{width:15px;height:15px;flex:0 0 auto}
+  .plate.connected{background:rgba(52,199,89,.16);border:.5px solid rgba(52,199,89,.5)}
+  .plate.connected .nm{color:#1d7a37}
+
+  /* body */
+  .post-body{padding:13px 16px 6px}
+  .cap{font-size:15px;color:var(--ink);margin:0;line-height:1.5;font-weight:450}
+  .cap .h{color:var(--blue);font-weight:600}
+
+  /* status / claim row */
+  .ppl{display:flex;flex-direction:column;gap:9px;margin-top:13px}
+  .pp{display:flex;align-items:center;gap:10px}
+  .pp .nm{font-family:var(--serif);font-size:15px;font-weight:600;letter-spacing:-.005em}
+  .pp .pd{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .tagstate{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+    padding:3px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;line-height:1}
+  .tagstate.hi{background:rgba(36,103,232,.10);color:var(--blue)}
+  .tagstate.edge{background:rgba(52,199,89,.14);color:#1d7a37}
+  .tagstate.invited{background:rgba(209,138,0,.12);color:var(--gold)}
+  .tagstate svg{width:12px;height:12px}
+  .claim-cta{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--rose);background:rgba(232,89,47,.09);
+    border:0;border-radius:999px;padding:7px 14px;cursor:pointer;transition:transform .1s, background .15s;white-space:nowrap}
+  .claim-cta:active{transform:scale(.95);background:rgba(232,89,47,.16)}
+
+  /* action bar */
+  .actions{display:flex;align-items:center;gap:6px;padding:12px 14px 14px;border-top:.5px solid var(--line);margin-top:11px}
+  .act{display:inline-flex;align-items:center;gap:7px;border:0;background:none;cursor:pointer;
+    font-size:13.5px;font-weight:600;color:var(--ink-soft);padding:7px 10px;border-radius:999px;transition:background .15s, color .15s}
+  .act:active{background:rgba(22,20,18,.05)}
+  .act svg{width:19px;height:19px;transition:transform .15s}
+  .act.on{color:var(--rose)}
+  .act.on svg{transform:scale(1);animation:pop .4s ease}
+  .act.on .heart{fill:var(--rose)}
+  .act .heart{fill:none;stroke:currentColor;stroke-width:1.8}
+  .act-spacer{flex:1}
+  .met-too{font-size:12.5px;font-weight:600;color:var(--ink);background:var(--paper);border:.5px solid var(--line-2);
+    border-radius:999px;padding:8px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:transform .1s}
+  .met-too:active{transform:scale(.95)}
+  .met-too svg{width:15px;height:15px}
+
+  /* end note */
+  .endnote{text-align:center;color:var(--ink-faint);font-size:12.5px;padding:22px 24px 8px;font-weight:500;line-height:1.6}
+  .endnote .ln{width:30px;height:.5px;background:var(--line-2);margin:0 auto 14px}
+
+  /* ---------- floating nav ---------- */
+  nav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 10px);
+    width:calc(100% - 24px);max-width:calc(var(--max) - 20px);height:var(--nav-h);
+    background:rgba(251,250,247,.9);backdrop-filter:saturate(160%) blur(16px);-webkit-backdrop-filter:saturate(160%) blur(16px);
+    border:.5px solid var(--line);border-radius:22px;box-shadow:var(--shadow);display:flex;z-index:40}
+  .tab{flex:1;background:none;border:0;cursor:pointer;color:var(--ink-faint);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px;transition:color .15s}
+  .tab svg{width:21px;height:21px}
+  .tab span{font-size:10.5px;font-weight:600;letter-spacing:.01em}
+  .tab.active{color:var(--ink)}
+  .tab.active svg{stroke-width:2.1}
+
+  /* ---------- claim sheet ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(22,20,18,.42);z-index:50;opacity:0;pointer-events:none;transition:opacity .22s;backdrop-filter:blur(2px)}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:50%;transform:translateX(-50%) translateY(100%);bottom:0;width:100%;
+    max-width:var(--max);background:var(--paper);z-index:60;border-radius:24px 24px 0 0;
+    padding:8px 20px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -12px 44px rgba(20,18,16,.22);
+    transition:transform .3s cubic-bezier(.2,.8,.2,1);max-height:92vh;overflow-y:auto}
+  .sheet.show{transform:translateX(-50%) translateY(0)}
+  .grip{width:38px;height:4px;border-radius:999px;background:var(--line-2);margin:9px auto 18px}
+  .sheet .lead{display:flex;align-items:center;gap:13px;margin-bottom:18px}
+  .sheet .lead img,.sheet .lead .ava-fb{width:54px;height:54px;border-radius:50%;flex:0 0 auto}
+  .sheet h2{font-family:var(--serif);font-size:23px;font-weight:600;letter-spacing:-.01em;margin:0;line-height:1.15}
+  .sheet h2 + .s{font-size:13px;color:var(--ink-soft);margin-top:3px;font-weight:500}
+  .claim-card{background:var(--card);border:.5px solid var(--line);border-radius:16px;padding:15px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm)}
+  .claim-card .row{display:flex;gap:11px;align-items:flex-start;font-size:13.5px;color:var(--ink-soft);line-height:1.5;font-weight:500}
+  .claim-card .row + .row{margin-top:13px}
+  .claim-card .row svg{width:18px;height:18px;flex:0 0 auto;margin-top:1px;color:var(--green)}
+  .claim-card .row b{color:var(--ink);font-weight:600}
+  input[type=tel]{width:100%;font-family:inherit;font-size:16px;padding:14px 16px;border-radius:14px;
+    border:.5px solid var(--line-2);background:var(--card);color:var(--ink);outline:none;transition:border .15s, box-shadow .15s;letter-spacing:.02em}
+  input[type=tel]:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(22,20,18,.06)}
+  .field-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-faint);margin:4px 0 9px;font-weight:600}
+  .btn{font-size:15px;font-weight:600;padding:15px 22px;cursor:pointer;border:0;border-radius:14px;width:100%;
+    transition:transform .1s;display:inline-flex;align-items:center;justify-content:center;gap:8px;margin-top:16px}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--ink);color:#fff;box-shadow:var(--shadow-sm)}
+  .optout{display:block;width:100%;text-align:center;background:none;border:0;color:var(--ink-faint);
+    font-size:12.5px;font-weight:600;margin-top:16px;cursor:pointer;padding:6px}
+  .optout:active{color:var(--ink-soft)}
+
+  /* ---------- account / sign-in (ported from the capture app) ---------- */
+  .acct-btn{display:flex;align-items:center;gap:7px;background:none;border:0;cursor:pointer;padding:0;font:inherit;color:inherit}
+  .acct-ava{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:13px;flex:0 0 auto;background:rgba(36,103,232,.12);color:var(--blue);box-shadow:0 0 0 1.5px var(--line)}
+  .acct-ava.live{box-shadow:0 0 0 2px var(--green)}
+  .acct-ava img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+  .auth-msg{font-size:13.5px;color:var(--ink-soft);line-height:1.5;margin:0 0 16px}
+  .auth-msg b{color:var(--ink);font-weight:600}
+  .seg{display:flex;gap:6px;background:rgba(22,20,18,.05);padding:4px;border-radius:14px;margin:2px 0 18px}
+  .seg button{flex:1;border:0;background:none;cursor:pointer;font:inherit;font-size:13.5px;font-weight:600;color:var(--ink-soft);padding:9px 4px;border-radius:11px;transition:background .15s,color .15s}
+  .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm)}
+  .btn-ghost{background:var(--card);color:var(--ink);border:.5px solid var(--line-2);box-shadow:var(--shadow-sm)}
+  .btn-google{background:var(--card);color:var(--ink);border:.5px solid var(--line-2);box-shadow:var(--shadow-sm);gap:10px}
+  .btn-google svg{width:18px;height:18px}
+  input[type=text],input[type=email]{width:100%;font-family:inherit;font-size:16px;padding:14px 16px;border-radius:14px;
+    border:.5px solid var(--line-2);background:var(--card);color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
+  input[type=text]:focus,input[type=email]:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(22,20,18,.06)}
+  .acct-card{display:flex;align-items:center;gap:14px;padding:4px 0 6px}
+  .acct-card .big{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:21px;flex:0 0 auto;background:rgba(36,103,232,.12);color:var(--blue);box-shadow:0 0 0 2px var(--green)}
+  .acct-card .big img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+  .acct-card .nm{font-family:var(--serif);font-size:21px;font-weight:600;line-height:1.1}
+  .acct-card .ct{font-size:12.5px;color:var(--ink-soft);margin-top:4px;line-height:1.35}
+  .acct-card .ct .v{color:var(--green);font-weight:600}
+  .row-link{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:var(--card);border:.5px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);padding:14px 16px;cursor:pointer;font:inherit;color:var(--ink);font-size:14.5px;font-weight:600;margin-top:10px;text-align:left}
+  .row-link .sub{display:block;font-size:12px;color:var(--ink-faint);font-weight:500;margin-top:3px}
+  .row-link svg{width:16px;height:16px;color:var(--ink-faint);flex:0 0 auto}
+  /* ---------- empty state ---------- */
+  .empty{text-align:center;color:var(--ink-soft);padding:54px 26px 40px;animation:cardin .5s ease both}
+  .empty .ico{width:52px;height:52px;border-radius:50%;margin:0 auto 18px;display:grid;place-items:center;
+    background:rgba(52,199,89,.12);color:var(--green)}
+  .empty .ico svg{width:25px;height:25px}
+  .empty h3{font-family:var(--serif);font-weight:600;font-size:22px;color:var(--ink);margin:0 0 8px}
+  .empty p{margin:0 auto 22px;font-size:14px;max-width:280px;line-height:1.55;font-weight:500}
+  .empty .go{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:14px 24px;
+    border-radius:14px;background:var(--ink);color:#fff;text-decoration:none;box-shadow:var(--shadow-sm)}
+  .empty .go svg{width:17px;height:17px}
+  .empty .hint{display:block;font-size:12.5px;color:var(--ink-faint);margin-top:18px;font-weight:500}
+  .empty .hint a{color:var(--blue);font-weight:600;cursor:pointer;text-decoration:underline}
+
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);transform:translateX(-50%) translateY(16px);
+    background:var(--ink);color:#fff;font-size:13.5px;font-weight:600;padding:12px 18px;border-radius:14px;
+    box-shadow:var(--shadow);z-index:70;opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;display:flex;align-items:center;gap:9px;max-width:calc(var(--max) - 40px)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast svg{width:17px;height:17px;flex:0 0 auto;color:var(--green)}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="t"><span class="ld"></span>Who I Met</div>
+      <div class="sub">Your feed · HiRey</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-count"><b id="hdrCount">0</b>posted</div>
+      <button class="acct-btn" id="acctBtn" aria-label="Sign in"><span class="acct-ava" id="acctAva"></span></button>
+      <a class="add-btn" id="addBtn" href="index.html" aria-label="Post a meeting">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>The people <em>you</em> met.</h1>
+    <p id="mastheadSub">Your own diary, on this device — everyone you've posted in the app, newest first.</p>
+  </div>
+
+  <main id="feed"></main>
+
+  <div class="endnote hidden" id="endnote">
+    <div class="ln"></div>
+    That's everyone you've posted so far.<br>Met someone new? <a href="index.html" style="color:var(--rose);font-weight:600;text-decoration:none">Open the app →</a>
+  </div>
+</div>
+
+<nav>
+  <button class="tab active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/></svg><span>Feed</span></button>
+  <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg><span>Map</span></button>
+  <button class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6"/></svg><span>People</span></button>
+</nav>
+
+<!-- shared bottom sheet (sign-in / account render into here) -->
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+
+<div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span id="toastMsg"></span></div>
+
+<script>
+"use strict";
+/* =======================================================================
+   The Feed — reads YOUR real "Who I Met" posts.
+   Same origin as index.html, so it shares the app's IndexedDB ("wimt-db")
+   and the same Hi session (localStorage "wimt_hi"). No seed data, no fake
+   counts: every card below is something you actually posted on this device.
+   ======================================================================= */
+
+/* ---------- helpers ---------- */
+const esc=s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm=s=>(s||"").trim().toLowerCase().replace(/\s+/g," ");
+function initials(n){return ((n||"?").trim().split(/\s+/).slice(0,2).map(w=>w[0]||"").join("")||"?").toUpperCase();}
+const GRADS=[["#f6a","#7c4dff"],["#ffb347","#e8592f"],["#34c759","#2467e8"],["#d18a00","#e8592f"],
+  ["#7c4dff","#2467e8"],["#ff6b6b","#d18a00"],["#2467e8","#34c759"],["#e8592f","#7c4dff"]];
+function hash(s){let h=0;for(let i=0;i<(s||"").length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h;}
+function grad(name){const g=GRADS[hash(name||"?")%GRADS.length];return `linear-gradient(140deg,${g[0]},${g[1]})`;}
+
+/* ---------- shared bottom sheet + toast ---------- */
+const scrim=document.getElementById("scrim"), sheet=document.getElementById("sheet");
+function showSheet(){ scrim.classList.add("show"); requestAnimationFrame(()=>sheet.classList.add("show")); }
+function hideSheet(){ sheet.classList.remove("show"); scrim.classList.remove("show"); }
+scrim.onclick=hideSheet;
+let toastT;
+function toast(msg){ const t=document.getElementById("toast"); document.getElementById("toastMsg").textContent=msg;
+  t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2600); }
+
+/* ========================= IndexedDB (shared with index.html) ========================= */
+const DB_NAME="wimt-db", DB_VER=1; let _db=null;
+function openDB(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,DB_VER);
+  // Same schema as the capture app, in case the feed is opened before the app ever ran.
+  r.onupgradeneeded=e=>{ const db=e.target.result;
+    if(!db.objectStoreNames.contains("people")) db.createObjectStore("people",{keyPath:"id"});
+    if(!db.objectStoreNames.contains("meetings")){ const s=db.createObjectStore("meetings",{keyPath:"id"}); s.createIndex("createdAt","createdAt"); } };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function dbGetAll(s){ return new Promise((res,rej)=>{ const r=_db.transaction(s,"readonly").objectStore(s).getAll();
+  r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }); }
+
+const state={ people:[], meetings:[], urls:new Map(), remote:[] };
+const personById=id=>state.people.find(p=>p.id===id);
+async function loadAll(){
+  state.people=await dbGetAll("people");
+  state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
+  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
+  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+}
+const photoURL=m=>state.urls.get(m.id)||"";
+
+/* ========================= server posts (hi.owner-images list) =========================
+   Cross-device: when signed in, ALSO pull the user's own photo posts from Hi so they
+   show up on a fresh device that has no local IndexedDB copy. We list the caller's own
+   scope (self) — server returns this owner's images across visibilities. We only render
+   a server post when no LOCAL meeting already carries that oi_xxx (hiImageId) — local
+   wins (it has the names/people you tagged). Offline / signed-out: this is skipped and
+   the local diary still renders. */
+function imgDownloadUrl(img){
+  const d=img&&(img.download||img.download_url||img.url||{});
+  if(typeof d==="string") return /^https?:\/\//i.test(d)?d:"";
+  const u=d&&(d.url||d.download_url||d.signed_url||d.href)||"";
+  return /^https?:\/\//i.test(u)?u:"";
+}
+async function loadRemotePosts(){
+  state.remote=[];
+  if(!HI.authed()) return;
+  try{
+    // self scope (no customer_id) → the caller's own images. kind 'post' = the photo posts the app uploads.
+    const r=await HI.call("hi.owner-images",{ action:"list", kinds:["post"], limit:100 });
+    const images=(r&&(r.images||r.items||r.list))||[];
+    const localIds=new Set(state.meetings.map(m=>m.hiImageId).filter(Boolean));
+    for(const img of images){
+      const id=img.id||img.image_id; if(!id||localIds.has(id)) continue;   // local copy wins (it has tagged names)
+      let url=imgDownloadUrl(img);
+      if(!url){ try{ const g=await HI.call("hi.owner-images",{action:"get_download_url",image_id:id}); url=imgDownloadUrl(g)||(typeof g==="string"?g:(g&&(g.url||g.download_url)))||""; }catch(_){} }
+      const ts=Date.parse(img.created_at||img.createdAt||"")||Date.now();
+      state.remote.push({
+        id:"hi:"+id, remote:true, hiImageId:id, createdAt:ts,
+        photoUrl:url||"", caption:(img.caption_markdown||img.title||img.alt_text||"").trim(),
+        personIds:[], visibility:(img.visibility_status||img.visibility||"")
+      });
+    }
+  }catch(e){ /* signed out / transient — local feed still renders */ }
+}
+// Merge local meetings + remote-only posts (remote deduped against local hiImageId), newest first.
+function allPosts(){
+  return state.meetings.concat(state.remote).sort((a,b)=>b.createdAt-a.createdAt);
+}
+
+/* ========================= Hi platform (shared session) ========================= */
+/* Ported from index.html: same localStorage key + endpoints, so a sign-in in
+   either page is recognized in the other. Sign-in is OPTIONAL here — your
+   posts read fine without it; signing in just puts your real name/face on
+   the "who posted" line instead of a generic "You". */
+const HI={
+  base:"https://hi.hirey.ai",
+  KEY:"wimt_hi",
+  profile:null,
+  session(){ try{ return JSON.parse(localStorage.getItem(this.KEY)||"null"); }catch(_){ return null; } },
+  save(s){ localStorage.setItem(this.KEY,JSON.stringify(s)); },
+  clear(){ localStorage.removeItem(this.KEY); this.profile=null; },
+  authed(){ const s=this.session(); return !!(s&&s.access_token&&(!s.expires_at||s.expires_at>Date.now())); },
+  myName(){ return (this.profile&&this.profile.display_name)||(this.session()&&this.session().display_name)||""; },
+  async post(path,body,withAuth){
+    const headers={"content-type":"application/json"};
+    if(withAuth){ const s=this.session(); if(s&&s.access_token) headers.authorization="Bearer "+s.access_token; }
+    const r=await fetch(this.base+path,{method:"POST",headers,body:JSON.stringify(body||{})});
+    let j={}; try{ j=await r.json(); }catch(_){}
+    if(!r.ok){ const e=new Error(j.error||j.error_code||("http_"+r.status)); e.status=r.status; e.body=j; throw e; }
+    return j;
+  },
+  async call(cap,body){
+    const j=await this.post("/v1/capabilities/"+cap+"/call",body,true);
+    if(j&&j.error){ const e=new Error(j.error); e.body=j; throw e; }
+    return (j&&j.result)||j;
+  },
+  onToken(tok){
+    const ttl=(tok.expires_in||86400)*1000;
+    this.save({ access_token:tok.access_token, expires_at:Date.now()+ttl-60000,
+      agent_id:tok.agent_id, workspace_id:tok.workspace_id,
+      display_name:(this.session()&&this.session().display_name)||"",
+      owner_public_url:(this.session()&&this.session().owner_public_url)||"" });
+  },
+};
+async function hiSyncProfile(){ if(!HI.authed()) return null;
+  try{ const r=await HI.call("hi.owners",{action:"get"}); const p=r.owner_profile||r;
+    HI.profile=p; const s=HI.session()||{}; s.display_name=p.display_name||s.display_name; s.owner_public_url=r.owner_public_url; HI.save(s);
+    return p;
+  }catch(e){ if(e.status===401||(e.body&&e.body.error==="token_expired")){ HI.clear(); } return null; } }
+
+/* who posted: my real Hi name/avatar when signed in, else an honest "You" */
+function myDisplayName(){ return HI.myName()||"You"; }
+function myAvatarUrl(){ const p=HI.profile||{}; const a=p.avatar_url||p.avatar||p.avatar_thumb_url||""; return /^https?:\/\//i.test(a)?a:""; }
+function myPublicUrl(){ return (HI.profile&&HI.profile.owner_public_url)||((HI.session()||{}).owner_public_url)||""; }
+
+/* ========================= time formatting ========================= */
+function relTime(ts){ const now=Date.now(), diff=now-ts; const mins=Math.round(diff/60000);
+  if(mins<1) return "Just now"; if(mins<60) return mins+"m";
+  const hrs=Math.round(mins/60); if(hrs<24){ const d=new Date(ts), n=new Date();
+    if(d.toDateString()===n.toDateString()) return hrs+"h"; }
+  const dk=x=>new Date(x).setHours(0,0,0,0);
+  const days=Math.round((dk(now)-dk(ts))/86400000);
+  if(days===1) return "Yesterday";
+  if(days<7) return new Date(ts).toLocaleDateString(undefined,{weekday:"long"});
+  return new Date(ts).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+}
+function dayBucket(ts){ const dk=x=>new Date(x).setHours(0,0,0,0);
+  const days=Math.round((dk(Date.now())-dk(ts))/86400000);
+  if(days<=0) return "today"; if(days===1) return "yesterday";
+  return new Date(ts).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
+}
+function dayLabel(ts,bucket){ const sub=new Date(ts).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+  const title=bucket==="today"?"Today":bucket==="yesterday"?"Yesterday":bucket;
+  return `<div class="day-label"><span class="d">${esc(title)}</span><span class="c">${esc(sub)}</span></div>`;
+}
+
+/* ========================= card (real meeting → feed card) ========================= */
+/* avatar for the "who posted" line — real Hi photo if signed in, else initials chip */
+function posterAva(){ const url=myAvatarUrl(), nm=myDisplayName();
+  const fb=`<div class='ava ava-fb' style='background:${grad(nm)}'>${esc(initials(nm))}</div>`;
+  return url?`<img class="ava" src="${esc(url)}" alt="" onerror="this.outerHTML=\`${fb.replace(/`/g,'\\`')}\`">`:fb;
+}
+
+function plate(name){
+  return `<span class="plate"><span class="pd" style="background:rgba(22,20,18,.30)"></span><span class="nm">${esc(name)}</span></span>`;
+}
+function personRow(name){
+  return `<div class="pp"><span class="pd" style="background:rgba(22,20,18,.30)"></span><span class="nm">${esc(name)}</span></div>`;
+}
+
+function card(m){
+  const ppl=m.personIds.map(id=>personById(id)).filter(Boolean);
+  const names=ppl.map(p=>p.name);
+  const nm0=names[0]||"Someone";
+  const who=myDisplayName();
+  // local meetings carry an IndexedDB blob URL; remote-only posts carry a presigned photoUrl (the user's OWN image).
+  const photo=m.remote?(m.photoUrl||""):photoURL(m);
+  // No external faces, ever: only the user's own captured photo. No photo → deterministic initials block.
+  const fbMedia=`<div class='photo-fb' style='background:${grad(nm0)}'>${esc(initials(nm0))}</div>`;
+  const media=photo?`<img class="photo" src="${esc(photo)}" alt="" loading="lazy">`:fbMedia;
+  const plates=names.length?`<div class="plates">${names.map(plate).join("")}</div>`:"";
+  const headline=names.length
+    ? `<b>${esc(who)}</b> met ${esc(names.map(n=>n.split(" ")[0]).join(" & "))}`
+    : `<b>${esc(who)}</b> posted a moment`;
+  return `
+  <article class="post" data-id="${esc(m.id)}">
+    <div class="post-top">
+      ${posterAva()}
+      <div class="by">
+        <div class="l1">${headline}</div>
+        <div class="l2">${esc(relTime(m.createdAt))}</div>
+      </div>
+    </div>
+    <div class="photo-wrap">
+      ${media}
+      <div class="photo-grad"></div>
+      ${plates}
+    </div>
+    <div class="post-body">
+      ${m.caption?`<p class="cap">${esc(m.caption)}</p>`:""}
+      ${names.length?`<div class="ppl">${ppl.map(p=>personRow(p.name)).join("")}</div>`:""}
+    </div>
+  </article>`;
+}
+
+/* ========================= render ========================= */
+function emptyState(){
+  const signInLine=HI.authed()?"":
+    `<span class="hint">Tip: <a id="emptySignIn">sign in</a> to put your name &amp; face on your cards.</span>`;
+  return `<div class="empty">
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4l1.5 2h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l1.5-2z"/><circle cx="12" cy="12.5" r="3.4"/></svg></div>
+    <h3>Nothing posted yet</h3>
+    <p>This is your own diary — the people you meet show up here once you post them in the app.</p>
+    <a class="go" href="index.html">Open the app to post <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    ${signInLine}
+  </div>`;
+}
+
+function render(){
+  const feed=document.getElementById("feed");
+  const end=document.getElementById("endnote");
+  const posts=allPosts();   // local meetings + any server-only posts (cross-device), newest first
+  // honest header count = real posts visible here (local on this device + your own synced posts)
+  document.getElementById("hdrCount").textContent=posts.length;
+  if(!posts.length){ feed.innerHTML=emptyState(); end.classList.add("hidden");
+    const si=document.getElementById("emptySignIn"); if(si) si.onclick=openAccount;
+    return;
+  }
+  let html="", lastBucket="";
+  posts.forEach(m=>{ const b=dayBucket(m.createdAt);
+    if(b!==lastBucket){ html+=dayLabel(m.createdAt,b); lastBucket=b; }
+    html+=card(m);
+  });
+  feed.innerHTML=html; end.classList.remove("hidden");
+}
+
+/* ========================= account / Hi sign-in (ported from app) ========================= */
+const CHEV=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
+let _auth={ method:"email", stage:"enter", flowId:null, value:"", busy:false };
+function updateAcct(){
+  const ab=document.getElementById("acctAva"); if(!ab) return;
+  ab.classList.toggle("live",HI.authed());
+  const av=myAvatarUrl(), nm=HI.myName();
+  ab.innerHTML=av?`<img src="${esc(av)}" alt="" onerror="this.parentNode.textContent='${esc(initials(nm||'?'))}'">`
+    :(nm?esc(initials(nm)):`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>`);
+}
+function openAccount(){
+  hideSheet();
+  if(!HI.authed()) _auth={method:"email",stage:"enter",flowId:null,value:"",busy:false};
+  else if(!HI.profile) hiSyncProfile().then(()=>{ if(sheet.classList.contains("show")&&HI.authed()){ renderAccount(); updateAcct(); render(); } });
+  renderAccount(); showSheet();
+}
+function renderAccount(){
+  if(HI.authed()){
+    const p=HI.profile||{}, name=HI.myName()||"You", av=myAvatarUrl(), url=myPublicUrl();
+    sheet.innerHTML=`
+      <div class="grip"></div>
+      <h2>Your HiRey</h2>
+      <div class="acct-card" style="margin-top:14px">
+        <div class="big">${av?`<img src="${esc(av)}" alt="" onerror="this.parentNode.textContent='${esc(initials(name))}'">`:esc(initials(name))}</div>
+        <div><div class="nm">${esc(name)}</div>
+        <div class="ct">${p.headline?esc(p.headline)+" · ":""}<span class="v">signed in</span></div></div>
+      </div>
+      <p class="auth-msg" style="margin:16px 0 8px">Your posts live on this device. Signing in just puts your real name &amp; face on the cards you post.</p>
+      ${url?`<button class="row-link" id="acctView"><span>View my public page<span class="sub">${esc(url.replace(/^https?:\/\//,""))}</span></span>${CHEV}</button>`:""}
+      <a class="row-link" href="index.html" style="text-decoration:none"><span>Open the capture app<span class="sub">Post someone new, edit your profile</span></span>${CHEV}</a>
+      <button class="row-link" id="acctOut"><span>Sign out</span>${CHEV}</button>`;
+    const v=document.getElementById("acctView"); if(v&&url) v.onclick=()=>window.open(url,"_blank","noopener");
+    document.getElementById("acctOut").onclick=()=>{ HI.clear(); state.remote=[]; hideSheet(); updateAcct(); render(); toast("Signed out — your posts stay here"); };
+    return;
+  }
+  sheet.innerHTML=`
+    <div class="grip"></div>
+    <h2>Sign in to HiRey</h2>
+    <p class="auth-msg">Your posts already live on this device — you can read them without signing in. Sign in to put <b>your</b> name &amp; face on the cards you post.</p>
+    <div class="seg" id="authSeg">
+      <button data-m="email" class="${_auth.method==="email"?"on":""}">Email</button>
+      <button data-m="phone" class="${_auth.method==="phone"?"on":""}">Phone</button>
+      <button data-m="google" class="${_auth.method==="google"?"on":""}">Google</button>
+    </div>
+    <div id="authArea"></div>`;
+  document.querySelectorAll("#authSeg button").forEach(b=>b.onclick=()=>{ _auth={method:b.dataset.m,stage:"enter",flowId:null,value:"",busy:false}; renderAccount(); });
+  renderAuthArea();
+}
+function renderAuthArea(){
+  const a=document.getElementById("authArea"); if(!a) return; const m=_auth.method;
+  if(m==="google"){
+    a.innerHTML=`<button class="btn btn-google" id="gBtn"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.85 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.67 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>Continue with Google</button>
+      <p class="auth-msg" id="gHint" style="text-align:center;margin:12px 0 0">A Google window opens — sign in, then come back here.</p>`;
+    document.getElementById("gBtn").onclick=authGoogle; return;
+  }
+  const isPhone=m==="phone";
+  if(_auth.stage==="enter"){
+    a.innerHTML=`
+      <div class="field-label">${isPhone?"Your phone":"Your email"}</div>
+      <input type="${isPhone?"tel":"email"}" id="authVal" placeholder="${isPhone?"+1 555 123 4567":"you@example.com"}" inputmode="${isPhone?"tel":"email"}" autocomplete="${isPhone?"tel":"email"}" value="${esc(_auth.value)}">
+      <button class="btn btn-primary" id="authGo">Send code</button>`;
+    const inp=document.getElementById("authVal");
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); authSend(); }});
+    document.getElementById("authGo").onclick=authSend;
+    setTimeout(()=>inp.focus(),60);
+  } else {
+    a.innerHTML=`
+      <p class="auth-msg">Enter the 6-digit code we sent to <b>${esc(_auth.value)}</b>.</p>
+      <input type="text" id="authCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      <button class="btn btn-primary" id="authVerify">Verify &amp; sign in</button>
+      <button class="optout" id="authBack">Change ${isPhone?"phone":"email"}</button>`;
+    const inp=document.getElementById("authCode");
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); authVerify(); }});
+    document.getElementById("authVerify").onclick=authVerify;
+    document.getElementById("authBack").onclick=()=>{ _auth.stage="enter"; _auth.flowId=null; renderAccount(); };
+    setTimeout(()=>inp.focus(),60);
+  }
+}
+async function authSend(){
+  if(_auth.busy) return; const v=(document.getElementById("authVal").value||"").trim();
+  if(!v){ toast("Enter your "+(_auth.method==="phone"?"phone":"email")); return; }
+  _auth.value=v; _auth.busy=true; const btn=document.getElementById("authGo"); if(btn){ btn.textContent="Sending…"; btn.disabled=true; }
+  try{
+    const body=_auth.method==="phone"?{phone:v}:{email:v};
+    const r=await HI.post("/v1/auth/web/"+_auth.method+"/start",body,false);
+    _auth.flowId=r.flow_id; _auth.stage="code"; _auth.busy=false; renderAccount();
+  }catch(e){ _auth.busy=false; if(btn){ btn.textContent="Send code"; btn.disabled=false; }
+    toast(e.message==="invalid_email"?"That email looks off":e.message==="invalid_phone"?"That phone looks off":e.message==="too_many_codes"?"Too many codes — wait a bit":"Could not send code"); }
+}
+async function authVerify(){
+  if(_auth.busy) return; const code=(document.getElementById("authCode").value||"").trim();
+  if(code.length<4){ toast("Enter the 6-digit code"); return; }
+  _auth.busy=true; const btn=document.getElementById("authVerify"); if(btn){ btn.textContent="Signing in…"; btn.disabled=true; }
+  try{
+    const r=await HI.post("/v1/auth/web/"+_auth.method+"/verify",{flow_id:_auth.flowId,code},false);
+    await finishAuth(r);
+  }catch(e){ _auth.busy=false; if(btn){ btn.textContent="Verify & sign in"; btn.disabled=false; }
+    toast(e.message==="wrong_code"?"Wrong code — try again":e.message==="expired"||e.message==="flow_not_found"?"Code expired — resend":e.message==="too_many_attempts"?"Too many tries — resend a new code":"Could not verify"); }
+}
+async function authGoogle(){
+  const hint=document.getElementById("gHint");
+  let popup=null; try{ popup=window.open("about:blank","hi_google","width=480,height=680"); }catch(_){}
+  try{
+    const r=await HI.post("/v1/auth/web/google/start",{},false);
+    if(popup){ try{ popup.location.href=r.authorize_url; }catch(_){ popup=null; } }
+    if(!popup){ if(hint) hint.innerHTML=`<a href="${esc(r.authorize_url)}" target="_blank" rel="noopener" style="color:var(--blue);font-weight:600">Open Google sign-in ›</a> — then return here.`; }
+    else if(hint) hint.textContent="Waiting for Google… finish in the other window.";
+    for(let i=0;i<150;i++){ await new Promise(res=>setTimeout(res,2000));
+      let pr; try{ pr=await HI.post("/v1/auth/web/google/poll",{flow_id:r.flow_id},false); }catch(e){ if(e.status===404) break; continue; }
+      if(pr.status==="verified"){ try{ popup&&popup.close(); }catch(_){} await finishAuth(pr); return; }
+    }
+    if(hint) hint.textContent="Timed out — tap to try again.";
+  }catch(e){ try{ popup&&popup.close(); }catch(_){} toast("Google sign-in unavailable"); }
+}
+async function finishAuth(tok){
+  HI.onToken(tok); _auth.busy=false;
+  await hiSyncProfile();
+  hideSheet(); updateAcct(); render();
+  const nm=HI.myName(); toast(nm?("Signed in — welcome, "+nm.split(" ")[0]):"Signed in to HiRey");
+  // Now that we're signed in, pull this user's own server posts so cross-device posts appear.
+  try{ await loadRemotePosts(); render(); }catch(_){}
+}
+
+/* ========================= wiring ========================= */
+document.getElementById("acctBtn").onclick=openAccount;
+
+/* ========================= boot ========================= */
+(async()=>{
+  updateAcct();
+  try{ _db=await openDB(); await loadAll(); render(); }
+  catch(err){ console.error(err);
+    document.getElementById("feed").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Open this over https:// (not file://) so your posts can load.</p></div>`;
+  }
+  if(HI.authed()){ try{ await hiSyncProfile(); updateAcct(); render(); }catch(_){}
+    // Pull this user's own posts from the server too (so a fresh device sees them), then re-render.
+    try{ await loadRemotePosts(); render(); }catch(_){} }
+  // If the app posts while this tab is open in another tab, refresh on focus so the feed stays live.
+  document.addEventListener("visibilitychange",async()=>{ if(document.visibilityState==="visible"&&_db){
+    try{ await loadAll(); if(HI.authed()) await loadRemotePosts(); render(); }catch(_){} } });
+})();
+</script>
+</body>
+</html>
