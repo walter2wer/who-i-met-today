@@ -290,7 +290,7 @@
 "use strict";
 /* =======================================================================
    The Feed — reads YOUR real "Who I Met" posts.
-   Same origin as /met/app, so it shares the app's IndexedDB ("wimt-db")
+   Same origin as index.html, so it shares the app's IndexedDB ("wimt-db")
    and the same Hi session (localStorage "wimt_hi"). No seed data, no fake
    counts: every card below is something you actually posted on this device.
    ======================================================================= */
@@ -361,7 +361,7 @@ async function fetchFeedPage(){
 }
 
 /* ========================= Hi platform (shared session) ========================= */
-/* Ported from /met/app: same localStorage key + endpoints, so a sign-in in
+/* Ported from index.html: same localStorage key + endpoints, so a sign-in in
    either page is recognized in the other. Sign-in is OPTIONAL here — your
    posts read fine without it; signing in just puts your real name/face on
    the "who posted" line instead of a generic "You". */
