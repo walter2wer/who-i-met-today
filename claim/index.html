@@ -364,11 +364,16 @@
 
     // ── the reply IS the edge: capture the reaction here, on the page (A cold-flow) ──
     // Fire-and-forget to the platform; the warm confirmation shows regardless, so it never feels broken.
+    // Any positive reply confirms the prepared edge on the LIVE claim handler
+    // (POST /c/<token> action=claim → store.confirm_claim → did_meet=1 + connector notified).
+    // Same origin (hirey.ai → CloudFront /c/* → secretary). Fire-and-forget; token is the credential.
+    function postClaim(action){
+      if(!token) return;
+      try{ fetch("/c/"+encodeURIComponent(token),{method:"POST",redirect:"manual",
+        headers:{"content-type":"application/x-www-form-urlencoded"},body:"action="+action}).catch(function(){}); }catch(e){}
+    }
     function react(kind, title, sub){
-      try{
-        if(token) fetch("/api/met/react",{method:"POST",headers:{"content-type":"application/json"},
-          body:JSON.stringify({token:token,reaction:kind,from:from,name:name})}).catch(function(){});
-      }catch(e){}
+      postClaim("claim");
       var rs=document.getElementById("reacts");
       Array.prototype.forEach.call(rs.querySelectorAll("button"),function(b){ b.disabled=true; });
       document.getElementById("doneT").textContent=title;
@@ -384,7 +389,7 @@
       rv.scrollIntoView({behavior:"smooth",block:"center"});
     };
     document.getElementById("remove").onclick=function(){
-      try{ if(token) fetch("/api/met/react",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token:token,reaction:"remove"})}).catch(function(){}); }catch(e){}
+      postClaim("retract");   // opt-out → store.retract_claim (edge back to proposed + friction note)
       document.querySelector(".wrap").innerHTML="<div class='brand' style='justify-content:center'><span class='ld'></span>HiRey</div><p class='giftsub' style='margin-top:40px'>Removed. This won’t be shown, and you won’t be contacted. Thanks for letting us know.</p>";
     };
   })();
