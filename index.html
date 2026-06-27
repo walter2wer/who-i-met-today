@@ -416,17 +416,18 @@ function hiConsentFor(p){ if(!p) return null; return HI.consent.get(p.nameLower|
 /* ========================= server-side photo sync (hi.owner-images) =========================
    Offline-first: the photo always lives in IndexedDB. When signed in, we ALSO push a
    copy to the user's OWN Hi owner-images so it survives a device change. Hard rules:
-   - PRIVATE by default. A moment is only ever public if the user EXPLICITLY chose
-     "Post to the public feed" at save time (meeting.hiPublic===true).
-   - Public/private is decided at UPLOAD time and cannot be changed afterward to ADD a
-     post to the feed:
+   - PRIVATE by default. A moment is only ever public if the user EXPLICITLY chose it —
+     either "Post to the public feed" at save time (meeting.hiPublic===true), or later by
+     tapping the per-card "Private" pill (see publishMeetingToFeed).
+   - feed-eligibility is locked PER IMAGE at UPLOAD time and can't be flipped afterward:
        request_public_on_approve:true  + feed_eligible:true → after AI approve the image
                                           auto-goes public + enters the platform /met feed.
        request_public_on_approve:false → stays private + review_status=pending forever;
-                                          a later set_visibility=public will NOT push it
-                                          into the feed. So a private post can never be
-                                          "promoted" to the feed after the fact.
-     => The public-vs-private choice is captured once, in the save sheet, and passed here.
+                                          a later set_visibility=public will NOT push that
+                                          image into the feed.
+     => So promoting an existing private post to the feed is done NOT by toggling its image,
+        but by RE-UPLOADING the photo as a fresh feed-eligible image (publishMeetingToFeed).
+        The save-sheet choice just decides the flags on the first upload.
    - This is the user's OWN photo (their post, like an IG post). No faceprints, no 1:N
      face search, no identity index — just bytes the user chose to keep in their account.
    Flow: presign_upload(kind:'post') → S3 PUT → finalize_upload(image_id).
@@ -526,11 +527,9 @@ async function pullMyServerPosts(){
     });
   }
 }
-// Take an already-public post back to PRIVATE (unpublish). This is the only honest
-// post-upload visibility change: set_visibility=private genuinely removes the image from
-// the /met feed. The reverse (private→public) is NOT available here — a private post was
-// uploaded request_public_on_approve:false and can never be promoted into the feed after
-// the fact, so the public/private choice is made once at save time (see saveMoment).
+// Take an already-public post back to PRIVATE (unpublish). set_visibility=private genuinely
+// removes the image from the /met feed. (The reverse — private→public — can't be done with
+// set_visibility, because feed_eligible is locked at upload time; see publishMeetingToFeed.)
 async function unpublishMeeting(meeting){
   if(!HI.authed() || !meeting || !meeting.hiImageId) return false;
   try{
@@ -541,6 +540,63 @@ async function unpublishMeeting(meeting){
     if(!meeting.remote){ try{ await dbPut("meetings",meeting); }catch(_){} }
     return true;
   }catch(e){ toast("Couldn't change visibility"); return false; }
+}
+// Get the actual photo bytes for a meeting, whichever device it lives on.
+//  - Local meeting: the Blob is right there in IndexedDB (meeting.photo).
+//  - Synced/remote post with no local blob: ask Hi for a presigned GET URL for the current
+//    image and fetch the bytes back. We need real bytes (not just the URL) because the only
+//    way to make a post feed-eligible is to RE-UPLOAD it as a fresh feed_eligible image.
+async function meetingPhotoBlob(meeting){
+  if(meeting && meeting.photo) return meeting.photo;
+  if(!HI.authed() || !meeting || !meeting.hiImageId) return null;
+  let url="";
+  try{
+    const g=await HI.call("hi.owner-images",{ action:"get_download_url", image_id:meeting.hiImageId });
+    url=imgDownloadUrl(g)||(typeof g==="string"?g:(g&&(g.url||g.download_url)))||"";
+  }catch(_){ return null; }
+  if(!/^https?:\/\//i.test(url)) return null;
+  try{ const r=await fetch(url); if(!r.ok) return null; const b=await r.blob();
+    return (b&&b.size)?b:null; }catch(_){ return null; }
+}
+// Re-upload a meeting's photo as a NEW feed-eligible+public image so it actually lands in the
+// public /met feed. (A set_visibility=public on the EXISTING image never enters the feed —
+// feed_eligible/request_public_on_approve are write-once at upload time. So "promote to feed"
+// genuinely means: upload a fresh copy with those flags, then drop the old image.)
+// Returns the new oi_xxx image id, or null. Throws on hard upload failure.
+async function reuploadAsPublic(blob){
+  const mime=mimeOf(blob);
+  let dims={w:0,h:0}; try{ dims=await blobDims(blob); }catch(_){}
+  const pre=await HI.call("hi.owner-images",{ action:"presign_upload", kind:"post",
+    original_filename:"who-i-met-pub-"+uid()+"."+extFor(mime), mime_type:mime,
+    size_bytes:blob.size||undefined, width:dims.w||undefined, height:dims.h||undefined,
+    request_public_on_approve:true, feed_eligible:true });
+  const img=pre.image||pre, up=pre.upload||{};
+  const imageId=img.id||img.image_id; const putUrl=up.url||up.upload_url||up.put_url;
+  if(!imageId||!putUrl){ throw new Error("presign_missing_fields"); }
+  const headers=Object.assign({"content-type":mime}, up.required_headers||up.headers||{});
+  const put=await fetch(putUrl,{ method:"PUT", body:blob, headers });
+  if(!put.ok){ throw new Error("s3_put_"+put.status); }
+  await HI.call("hi.owner-images",{ action:"finalize_upload", image_id:imageId, reported_size_bytes:blob.size||undefined });
+  return imageId;
+}
+// Promote a private/synced/old post into the public /met feed. The photo is re-uploaded as a
+// fresh feed-eligible+public image; on success the meeting points at the NEW image id and the
+// OLD image is deleted (best-effort — a leftover orphan is not fatal). Returns true on success.
+async function publishMeetingToFeed(meeting){
+  if(!HI.authed() || !meeting || !meeting.hiImageId || meeting.hiPublic) return false;
+  const blob=await meetingPhotoBlob(meeting);
+  if(!blob){ toast("Couldn't load the photo to publish"); return false; }
+  const oldId=meeting.hiImageId;
+  let newId=null;
+  try{ newId=await reuploadAsPublic(blob); }
+  catch(e){ toast("Couldn't publish — try again"); return false; }
+  if(!newId){ toast("Couldn't publish — try again"); return false; }
+  meeting.hiImageId=newId; meeting.hiPublic=true; meeting.hiSyncedAt=Date.now();
+  // Persist local meetings; remote pseudo-records are session-only (server is the truth on next pull).
+  if(!meeting.remote){ try{ await dbPut("meetings",meeting); }catch(_){} }
+  // Drop the old image now that the new feed copy is finalized — avoids leaving an orphan.
+  try{ await HI.call("hi.owner-images",{ action:"delete", image_id:oldId }); }catch(_){}
+  return true;
 }
 
 /* ========================= state / helpers ========================= */
@@ -727,8 +783,9 @@ async function saveMoment(shareAfter){
   const note=document.getElementById("capNote").value.trim();
   const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
   const blob=pending.blob;
-  // The public/private choice, locked in BEFORE upload (can't be promoted to feed later).
-  // Only photos can be public; a no-photo voice note never goes to the feed.
+  // The public/private choice for THIS first upload. (It can still be flipped later from the
+  // card pill — publishMeetingToFeed re-uploads to reach the feed.) Only photos can be public;
+  // a no-photo voice note never goes to the feed.
   const wantPublic=!!(pending.makePublic && blob && HI.authed());
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
   await applyPendingHiLinks();
@@ -905,16 +962,16 @@ function meetingCardHTML(m,i=0){
     :(isRemote?`<span class="chip" style="color:var(--ink-faint);font-style:italic">From your HiRey account</span>`
               :`<span class="chip add">+ add a name</span>`);
   // Visibility pill: shown once the photo is on Hi (has an oi_xxx) — works for both local-synced
-  // and remote posts. PUBLIC posts get a tappable pill (tap → back to private/unpublish, which
-  // genuinely removes it from the feed). PRIVATE posts get a non-interactive label: a private
-  // post can't be promoted into the feed after the fact, so we don't pretend it can — going
-  // public is chosen when you save the moment.
+  // and remote posts. Both states are now tappable toggles:
+  //   PUBLIC  → tap takes it back to private (set_visibility=private; genuinely leaves the feed).
+  //   PRIVATE → tap publishes it to the public feed (re-uploads as a fresh feed-eligible image,
+  //             after a consent confirm — see publishMeetingToFeed). It can really go public now.
   const LOCK=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
   const GLOBE=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`;
   const visBtn=(HI.authed()&&m.hiImageId)
     ? (m.hiPublic
-        ? `<button class="card-vis pub" data-mid="${m.id}" title="Public — tap to make private (removes it from the feed)">${GLOBE}Public</button>`
-        : `<span class="card-vis priv" title="Private — only you. To post publicly, choose “Post to the public feed” when you save a moment.">${LOCK}Private</span>`)
+        ? `<button class="card-vis pub" data-mid="${m.id}" data-act="private" title="Public — on the /met feed. Tap to make private (removes it from the feed).">${GLOBE}Public</button>`
+        : `<button class="card-vis priv" data-mid="${m.id}" data-act="public" title="Private — only you. Tap to post it to the public /met feed.">${LOCK}Private</button>`)
     : "";
   const photo=photoURL(m);
   return `<div class="card" data-mid="${m.id}" style="animation-delay:${i*45}ms">
@@ -929,17 +986,32 @@ function wireCards(root){
   root.querySelectorAll(".chip[data-pid]").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
   root.querySelectorAll(".chip.add").forEach(c=>c.onclick=()=>retag(c.closest(".card").dataset.mid));
   root.querySelectorAll(".card-share").forEach(b=>b.onclick=e=>{ e.stopPropagation(); shareFromCard(b.dataset.mid); });
-  // Only PUBLIC pills are <button>s (private pills are inert <span>s) — tapping one unpublishes.
-  root.querySelectorAll("button.card-vis").forEach(b=>b.onclick=e=>{ e.stopPropagation(); makeMeetingPrivate(b.dataset.mid); });
+  // Both pills are now toggles: data-act="public" → publish to feed, "private" → unpublish.
+  root.querySelectorAll("button.card-vis").forEach(b=>b.onclick=e=>{ e.stopPropagation();
+    if(b.dataset.act==="public") makeMeetingPublic(b.dataset.mid, b);
+    else makeMeetingPrivate(b.dataset.mid); });
 }
-// Tap on a Public pill → take it private again (remove from the /met feed). The reverse
-// (private → public) is intentionally NOT offered here: a private post can't be promoted to
-// the feed after upload, so public is chosen at save time, not toggled here.
+// Tap on a Public pill → take it private again (remove from the /met feed).
 async function makeMeetingPrivate(mid){
   const m=findCard(mid); if(!m||!m.hiImageId||!m.hiPublic) return;
   if(!confirm("Make this private?\n\nIt will be removed from the public /met feed and visible only to you.")) return;
   const ok=await unpublishMeeting(m);
   if(ok){ renderAll(); toast("Back to private — only you"); }
+}
+// Tap on a Private pill → publish to the public /met feed. Public is an explicit, consented
+// action: every photo is a real person who must agree to be shown publicly. We confirm consent,
+// then re-upload the photo as a fresh feed-eligible image (the only way a post can enter the feed).
+async function makeMeetingPublic(mid, btnEl){
+  if(!HI.authed()){ toast("Sign in to post to the public feed"); openAccount(); return; }
+  const m=findCard(mid); if(!m||!m.hiImageId||m.hiPublic) return;
+  if(!confirm("Post this to the public /met feed?\n\nEveryone will be able to see it. Only post with the consent of everyone pictured — each photo is a real person.")) return;
+  // In-progress state on the pill itself; restore on failure.
+  let restore="";
+  if(btnEl){ restore=btnEl.innerHTML; btnEl.disabled=true; btnEl.textContent="Publishing…"; }
+  let ok=false;
+  try{ ok=await publishMeetingToFeed(m); }catch(_){ ok=false; }
+  if(ok){ renderAll(); toast("Posted — it’s on the public feed once review clears"); }
+  else if(btnEl){ btnEl.disabled=false; btnEl.innerHTML=restore; }   // rollback the pill UI
 }
 function shareFromCard(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m||!m.personIds.length) return;
   showSheet("sheet2","scrim2");
