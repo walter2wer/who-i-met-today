@@ -506,17 +506,24 @@ async function pullMyServerPosts(){
     images=(r&&(r.images||r.items||r.list))||[];
   }catch(e){ return; /* signed out / transient — keep local view */ }
   const byImageId=new Map(state.meetings.filter(m=>m.hiImageId).map(m=>[m.hiImageId,m]));
+  // Reconcile locals first (no network); collect server-only posts.
+  const remoteImgs=[];
   for(const img of images){
     const id=img.id||img.image_id; if(!id) continue;
-    const vis=(img.visibility_status||img.visibility||"").toLowerCase();
     const local=byImageId.get(id);
     if(local){
       // Server is truth for visibility — reconcile the toggle state.
-      const pub=vis==="public";
+      const pub=(img.visibility_status||img.visibility||"").toLowerCase()==="public";
       if(!!local.hiPublic!==pub){ local.hiPublic=pub; try{ await dbPut("meetings",local); }catch(_){} }
       continue;
     }
-    // Server-only post (no local blob on this device): show it read-only via its presigned URL.
+    remoteImgs.push(img);
+  }
+  // Server-only posts: fetch presigned URLs in PARALLEL. Was N sequential round-trips
+  // (≈N×latency — several seconds at 30+ posts); now one parallel batch.
+  await Promise.all(remoteImgs.map(async img=>{
+    const id=img.id||img.image_id;
+    const vis=(img.visibility_status||img.visibility||"").toLowerCase();
     let url=imgDownloadUrl(img);
     if(!url){ try{ const g=await HI.call("hi.owner-images",{action:"get_download_url",image_id:id}); url=imgDownloadUrl(g)||(typeof g==="string"?g:(g&&(g.url||g.download_url)))||""; }catch(_){} }
     state.remote.push({
@@ -525,7 +532,7 @@ async function pullMyServerPosts(){
       photoUrl:url||"", caption:(img.caption_markdown||img.title||img.alt_text||"").trim(),
       personIds:[]
     });
-  }
+  }));
 }
 // Take an already-public post back to PRIVATE (unpublish). set_visibility=private genuinely
 // removes the image from the /met feed. (The reverse — private→public — can't be done with
@@ -1479,7 +1486,7 @@ async function hiInvite(pid){
 async function invitePerson(pid){ const p=personById(pid); if(!p) return;
   const first=p.name.split(" ")[0];
   const url=claimURL(p);
-  const msg=first+", great meeting you today — here's our card: "+url;
+  const msg=first+", I met you today — claim your HiRey profile: "+url;
   const m=state.meetings.find(x=>x.personIds.includes(pid)&&x.photo);
   let sent=false;
   try{
@@ -1519,7 +1526,7 @@ async function makeCardBlob(meName, theirName, photoBlob, dateTs, accent){
 }
 async function shareCard(cardBlob, p, includeContact){ const first=p.name.split(" ")[0];
   const url=claimURL(p);
-  let text="Great meeting you, "+first+"! Here's our card: "+url;
+  let text="Great meeting you, "+first+"! Here's our card — claim your own HiRey page (people and their agents find you there) and connect back: "+url;
   const cardFile=new File([cardBlob],"we-met.jpg",{type:"image/jpeg"});
   const files=[cardFile]; const share=includeContact&&hasMyContact();
   if(share){ try{ files.push(makeMyVCardFile()); }catch(_){} }
@@ -1590,11 +1597,12 @@ window._seedDemo=async function(){
 /* ========================= boot ========================= */
 (async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName();
     if(HI.authed()){ (async()=>{ await hiSyncProfile(); await hiRefreshConsent();
-      // Server is the source of truth: pull this user's own posts (private+public) so the app
-      // and the /met feed show the same data, and reconcile each post's public/private state.
-      try{ await pullMyServerPosts(); }catch(_){}
-      try{ await syncPendingPhotos(); await pullMyServerPosts(); }catch(_){}
-      renderAll(); })(); } }
+      // Server is the source of truth: pull this user's own posts (private+public) — parallelized,
+      // render as soon as they land. (Was pulled twice on boot = double the round-trips.)
+      try{ await pullMyServerPosts(); renderAll(); }catch(_){}
+      // Push any local-only photos up (no-op on a fresh device); local copies already render.
+      try{ await syncPendingPhotos(); renderAll(); }catch(_){}
+    })(); } }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
 </body>
