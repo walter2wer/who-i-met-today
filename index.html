@@ -385,9 +385,11 @@ const HI={
   async post(path,body,withAuth){
     const headers={"content-type":"application/json"};
     if(withAuth){ const s=this.session(); if(s&&s.access_token) headers.authorization="Bearer "+s.access_token; }
-    // /api/* is OUR same-origin backend (hirey.ai → CloudFront → secretary); everything else
-    // (/v1/*, capabilities) is the Hi platform at this.base. Same signature either way.
-    const url=/^\/api\//.test(path)?path:(this.base+path);
+    // /api/* is OUR backend (CloudFront → secretary): same-origin on hirey.ai, but ABSOLUTE to
+    // hirey.ai when this app runs on another origin (e.g. hub.hirey.ai/wim migrating old data up —
+    // backend allows *.hirey.ai cross-origin + Bearer). /v1/* + capabilities → Hi platform (this.base).
+    const apiHost=(location.origin==="https://hirey.ai")?"":"https://hirey.ai";
+    const url=/^\/api\//.test(path)?(apiHost+path):(this.base+path);
     const r=await fetch(url,{method:"POST",headers,body:JSON.stringify(body||{})});
     let j={}; try{ j=await r.json(); }catch(_){}
     if(!r.ok){ const e=new Error(j.error||j.error_code||("http_"+r.status)); e.status=r.status; e.body=j; throw e; }
@@ -454,10 +456,20 @@ const MET={
     try{ return await HI.post("/api/met/meeting",this.meetingBody(m),true); }catch(_){ return null; } },
   async delMeeting(id){ if(!HI.authed()||!id) return null;
     try{ return await HI.post("/api/met/meeting/"+encodeURIComponent(id)+"/delete",{},true); }catch(_){ return null; } },
+  // Bulk-push in SMALL batches: a single body with a whole diary can exceed an edge body-size limit
+  // (CloudFront/WAF returns 403 for large POSTs). 25 rows/request keeps every batch well under any cap.
+  // Persons first, then meetings (so tags resolve to existing persons). Returns {ok:true} only if EVERY
+  // batch succeeded — else null, so migrate/self-heal leaves the flag unset and retries.
   async importAll(persons,meetings){ if(!HI.authed()) return null;
-    try{ return await HI.post("/api/met/import",{
-      persons:(persons||[]).map(p=>this.personBody(p)),
-      meetings:(meetings||[]).map(m=>this.meetingBody(m)) },true); }catch(_){ return null; } },
+    const CH=25;
+    const send=async(p,m)=>{ try{ return await HI.post("/api/met/import",{
+      persons:(p||[]).map(x=>this.personBody(x)), meetings:(m||[]).map(x=>this.meetingBody(x)) },true); }catch(_){ return null; } };
+    persons=persons||[]; meetings=meetings||[];
+    if(!persons.length && !meetings.length) return await send([],[]);
+    let okAll=true;
+    for(let i=0;i<persons.length;i+=CH){ if(!await send(persons.slice(i,i+CH),[])) okAll=false; }
+    for(let i=0;i<meetings.length;i+=CH){ if(!await send([],meetings.slice(i,i+CH))) okAll=false; }
+    return okAll?{ok:true}:null; },
 };
 
 /* Write wrappers: local IndexedDB stays the must-succeed write; the cloud push is
@@ -470,17 +482,71 @@ async function removeMeeting(id){ const r=await dbDel("meetings",id); if(HI.auth
 
 // First-login migration: push this device's local IndexedDB (people + meetings) to the cloud
 // once per device per account. import is idempotent (upsert by id) so a re-run is harmless.
+function _migFlag(){ const s=HI.session()||{}; return "wimt_migrated_v2_"+(s.customer_id||s.workspace_id||s.agent_id||"me"); }
+// Scan ALL IndexedDB databases on THIS origin (not just 'wimt-db'): an old app — e.g. the hub version
+// that wrote the user's original diary — may have used a different DB name, so its people live in a
+// database this app never opens. Returns the database with the most people + a per-DB breakdown.
+async function scanLocalDiary(){
+  let dbs=[]; try{ dbs=await indexedDB.databases(); }catch(_){}
+  if(!dbs||!dbs.length) dbs=[{name:DB_NAME}];
+  const all=[]; let best={people:[],meetings:[],db:""};
+  for(const d of dbs){ const name=d&&d.name; if(!name) continue; let db;
+    try{ db=await new Promise((ok,no)=>{ const r=indexedDB.open(name); r.onsuccess=()=>ok(r.result); r.onerror=()=>no(r.error); }); }catch(_){ all.push({db:name,people:0,err:1}); continue; }
+    try{ const stores=[...db.objectStoreNames];
+      const get=s=>new Promise(ok=>{ try{ const r=db.transaction(s,"readonly").objectStore(s).getAll(); r.onsuccess=()=>ok(r.result||[]); r.onerror=()=>ok([]); }catch(_){ ok([]); } });
+      const people=stores.includes("people")?await get("people"):[];
+      const meetings=stores.includes("meetings")?await get("meetings"):[];
+      all.push({db:name,people:people.length,meetings:meetings.length});
+      if(people.length>best.people.length) best={people,meetings,db:name};
+    }catch(_){ all.push({db:name,people:0,err:1}); }
+    try{ db.close(); }catch(_){}
+  }
+  best.all=all; return best;
+}
+// On-screen banner (mobile-friendly, no console) when this browser holds people not yet on the cloud:
+// shows which local DB they're in + a one-tap Sync, so the data is never invisible.
+async function showMigrateBanner(){
+  try{ if(!HI.authed()||document.getElementById("migBanner")) return;
+    const found=await scanLocalDiary(); if(!found.people.length) return;
+    const onCloud=new Set(state.people.map(p=>p.id));
+    if(!found.people.some(p=>p.id&&!onCloud.has(p.id))) return;   // all already synced
+    const diag=found.all.map(x=>x.db+":"+(x.err?"err":x.people+"p")).join("  ");
+    const el=document.createElement("div"); el.id="migBanner";
+    el.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;max-width:520px;margin:0 auto;z-index:70;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45";
+    el.innerHTML=`<div style="font-weight:650;margin-bottom:3px">Found ${found.people.length} people in this browser</div><div style="opacity:.65;font-size:11.5px;margin-bottom:11px">${esc(diag)}</div><button id="migGo" class="btn" style="width:100%;background:#fff;color:var(--ink);font-weight:600">Sync ${found.people.length} to my account</button><button id="migX" style="width:100%;background:none;border:0;color:#fff;opacity:.6;margin-top:6px;font-size:12px;cursor:pointer">Not now</button>`;
+    document.body.appendChild(el);
+    document.getElementById("migX").onclick=()=>el.remove();
+    document.getElementById("migGo").onclick=async()=>{ const g=document.getElementById("migGo"); g.disabled=true; g.textContent="Syncing…";
+      const res=await MET.importAll(found.people,found.meetings);
+      if(res){ localStorage.setItem(_migFlag(),String(Date.now())); try{ await mergeServerState(); renderAll(); }catch(_){} g.textContent="Synced "+found.people.length+" ✓"; setTimeout(()=>el.remove(),1600); }
+      else { g.disabled=false; g.textContent="Sync failed — tap to retry"; } };
+  }catch(_){}
+}
 async function migrateLocalToServer(){
   if(!HI.authed()) return;
-  const s=HI.session()||{}; const cid=s.customer_id||s.workspace_id||s.agent_id||"me";
-  const flag="wimt_migrated_"+cid;
-  if(localStorage.getItem(flag)) return;
+  if(localStorage.getItem(_migFlag())) return;
   try{
-    const people=await dbGetAll("people");
-    const meetings=await dbGetAll("meetings");
-    if(people.length||meetings.length){ await MET.importAll(people,meetings); }
-    localStorage.setItem(flag,String(Date.now()));
-  }catch(_){ /* leave the flag unset so we retry on next sign-in/boot */ }
+    const found=await scanLocalDiary();
+    const people=found.people, meetings=found.meetings;
+    if(!people.length && !meetings.length){ localStorage.setItem(_migFlag(),String(Date.now())); return; }
+    // MET.importAll swallows errors → returns null on failure. ONLY mark migrated on a real success,
+    // else leave the flag unset so it retries next sign-in/boot (a failed first try must not poison it).
+    const res=await MET.importAll(people,meetings);
+    if(res){ localStorage.setItem(_migFlag(),String(Date.now())); toast(`Synced ${people.length} people to your account`); }
+  }catch(_){ /* leave the flag unset so we retry */ }
+}
+// Manual force-sync (ignores the migrated flag) — for "I'm signed in but my people aren't on the
+// cloud yet" (e.g. an old origin whose first auto-sync failed before CORS was live).
+async function forceSyncToCloud(){
+  if(!HI.authed()){ toast("Sign in first to sync"); openAccount(); return; }
+  const found=await scanLocalDiary();   // scan ALL local DBs, not just wimt-db (old hub app uses another name)
+  const people=found.people, meetings=found.meetings;
+  if(!people.length && !meetings.length){ toast("Nothing on this device to sync"); return; }
+  toast(`Syncing ${people.length} people…`);
+  const res=await MET.importAll(people,meetings);
+  if(res){ localStorage.setItem(_migFlag(),String(Date.now())); try{ await mergeServerState(); renderAll(); }catch(_){}
+    toast(`Synced ${people.length} people, ${meetings.length} moments to the cloud`); }
+  else toast("Sync failed — check your connection and try again");
 }
 
 async function hiSyncProfile(){ if(!HI.authed()) return null;
@@ -737,6 +803,15 @@ async function mergeServerState(){
     try{ await dbPut("people",sp); }catch(_){}   // refresh cache only — do NOT echo back to server
   }
   state.people=Array.from(localPeople.values());
+  // Self-heal: if this device knows people the server doesn't (a migration that never landed), push them
+  // up now (+ the local meetings that tag them). Idempotent upsert-by-id; no flag dependency so it
+  // corrects the cloud on ANY login instead of relying on the once-per-device migrate.
+  try{
+    const serverIds=new Set((data.persons||[]).map(r=>{ const sp=MET.personFromRow(r); return sp&&sp.id; }));
+    const missing=state.people.filter(p=>p.id&&!serverIds.has(p.id));
+    if(missing.length){ const mids=new Set(missing.map(p=>p.id));
+      await MET.importAll(missing, state.meetings.filter(m=>(m.personIds||[]).some(id=>mids.has(id)))); }
+  }catch(_){}
   // -------- meetings: reconcile locals; add server-only text meetings --------
   // (correlate every server meeting_id → image_id for tag mapping, even when not cached locally)
   const imageOfMeeting=new Map();
@@ -781,22 +856,24 @@ async function mergeServerState(){
 function applyMetTags(){
   const byMeeting=state.tagsByMeeting, byImage=state.tagsByImage;
   if(!byMeeting&&!byImage) return;
-  const seen=new Set(state.people.map(p=>p.id));
-  const onlyKnown=ids=>Array.from(new Set(ids)).filter(id=>seen.has(id));
+  // MERGE (don't overwrite) so server tags add to person_ids meetingFromRow already set; DON'T filter to
+  // "known" people — a tag for a not-yet-synced person must survive (personById guards undefined downstream).
   for(const m of state.meetings){
-    if(byMeeting&&byMeeting.has(m.id)) m.personIds=onlyKnown(byMeeting.get(m.id));
+    const t=byMeeting&&byMeeting.get(m.id);
+    if(t&&t.length) m.personIds=Array.from(new Set([...(m.personIds||[]),...t]));
   }
   for(const m of (state.remote||[])){
-    if(byImage&&m.hiImageId&&byImage.has(m.hiImageId)) m.personIds=onlyKnown(byImage.get(m.hiImageId));
+    const t=byImage&&m.hiImageId&&byImage.get(m.hiImageId);
+    if(t&&t.length) m.personIds=Array.from(new Set([...(m.personIds||[]),...t]));
   }
 }
 // Local meetings carry an IndexedDB blob (object URL); remote-only posts carry a presigned URL.
 const photoURL=m=>(m&&m.remote?(m.photoUrl||""):(state.urls.get(m&&m.id)||""));
 const personById=id=>state.people.find(p=>p.id===id);
-const meetCount=pid=>state.meetings.filter(m=>m.personIds.includes(pid)).length;
+const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
 // Avatar photo: only a LOCAL Blob (stable object URL). Skip remote/server posts — their presigned
 // URLs expire, leaving a broken "?" image on the People circles. No local photo → initials.
-const latestPhotoFor=pid=>{ const m=state.meetings.find(m=>m.personIds.includes(pid)&&m.photo&&!m.remote); return m?photoURL(m):""; };
+const latestPhotoFor=pid=>{ const m=allMeetings().find(m=>(m.personIds||[]).includes(pid)&&(m.photo||m.photoUrl)); return m?photoURL(m):""; };
 function avaHTML(p){ const c=pcolor(p.name), av=latestPhotoFor(p.id);
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
   const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(p.name)}</div>`;
@@ -1009,7 +1086,7 @@ function blobToB64(blob){ return new Promise(res=>{ const r=new FileReader();
   r.onloadend=()=>{ const s=String(r.result||""), i=s.indexOf(","); res(i>=0?s.slice(i+1):""); };
   r.onerror=()=>res(""); r.readAsDataURL(blob); }); }
 async function makeVCard(p){
-  const ms=state.meetings.filter(m=>m.personIds.includes(p.id));
+  const ms=allMeetings().filter(m=>(m.personIds||[]).includes(p.id));
   const hi=p.hiOwner||{}, title=(p.title||hi.headline||"").trim();
   const parts=p.name.trim().split(/\s+/), given=parts[0]||p.name, family=parts.length>1?parts.slice(1).join(" "):"";
   const note=[]; if(ms[0]){ note.push("Met "+relDay(ms[0].createdAt)+(ms[0].caption?" — "+ms[0].caption:"")); }
@@ -1047,7 +1124,7 @@ function dictatePerson(pid){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_)
     await savePerson(p); renderPerson(pid); renderAll(); toast("Filled from voice — check the fields"); };
   try{ r2.start(); }catch(_){ if(btn) btn.classList.remove("live"); } }
 function renderPerson(pid){ const p=personById(pid); if(!p) return;
-  const ms=state.meetings.filter(m=>m.personIds.includes(pid)); const last=ms[0]?relDay(ms[0].createdAt):"—";
+  const ms=allMeetings().filter(m=>(m.personIds||[]).includes(pid)); const last=ms[0]?relDay(ms[0].createdAt):"—";
   const c=hiConsentFor(p), connected=!!(c&&c.state==="approved");
   const linked=!!(p.hiOwner&&(p.hiOwner.owner_public_url||p.hiOwner.customer_id));
   const onHi=connected||linked;
@@ -1212,7 +1289,7 @@ function renderDiary(){ const el=document.getElementById("diaryList");
 function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate()-7); return d.getTime(); })();
   document.getElementById("stPeople").textContent=state.people.length;
   document.getElementById("stMeetings").textContent=allMeetings().length;
-  document.getElementById("stWeek").textContent=new Set(state.meetings.filter(m=>m.createdAt>=wk).flatMap(m=>m.personIds)).size;
+  document.getElementById("stWeek").textContent=new Set(allMeetings().filter(m=>m.createdAt>=wk).flatMap(m=>m.personIds||[])).size;
   const el=document.getElementById("peopleGrid");
   if(!state.people.length){ el.className=""; el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/></svg></div><h3>No one here yet</h3><p>Your circle grows each time you capture a face.</p></div>`; return; }
   el.className="pgrid";
@@ -1495,6 +1572,7 @@ function renderAccount(){
       ${url?`<button class="row-link" id="acctView"><span>View my public page<span class="sub">${esc(url.replace(/^https?:\/\//,""))}</span></span>${CHEV}</button>`:""}
       <button class="row-link" id="acctExport"><span>Export my data<span class="sub">${state.people.length} people + ${allMeetings().length} moments &rarr; a file</span></span>${CHEV}</button>
       <button class="row-link" id="acctImport"><span>Import data<span class="sub">Bring people + moments from another device into this account</span></span>${CHEV}</button>
+      <button class="row-link" id="acctSync"><span>Sync this device to the cloud<span class="sub">Push this browser's ${state.people.length} people + moments up to your account</span></span>${CHEV}</button>
       <button class="row-link" id="acctOut"><span>Sign out</span>${CHEV}</button>
       <p class="consent" style="margin-top:18px">Your diary stays on this device. Signing in only syncs your profile and lets the people you invite claim a real HiRey page.</p>`;
     document.getElementById("acctShare").onclick=shareMyCard;
@@ -1502,6 +1580,7 @@ function renderAccount(){
     document.getElementById("acctContact").onclick=myContactEditor;
     document.getElementById("acctExport").onclick=exportData;
     document.getElementById("acctImport").onclick=pickImport;
+    document.getElementById("acctSync").onclick=forceSyncToCloud;
     const v=document.getElementById("acctView"); if(v&&url) v.onclick=()=>window.open(url,"_blank");
     document.getElementById("acctOut").onclick=()=>{ HI.clear(); state.remote=[]; state.tagsByMeeting=null; state.tagsByImage=null; hideSheet("sheet","scrim"); renderAll(); updateMe(); toast("Signed out — your diary stays here"); };
     return;
@@ -1602,6 +1681,7 @@ async function finishAuth(tok){
   (async()=>{
     try{ await migrateLocalToServer(); }catch(_){}        // first-login: push local people/meetings up
     try{ await mergeServerState(); renderAll(); }catch(_){} // pull people/tags/text-meetings down
+    try{ await showMigrateBanner(); }catch(_){}            // surface any local people not yet on the cloud
     try{ await syncPendingPhotos(); }catch(_){}            // push any local-only photos up
     try{ await pullMyServerPosts(); renderAll(); }catch(_){} // surface server-only photo posts
   })();
@@ -1860,6 +1940,7 @@ window._seedDemo=async function(){
       try{ await migrateLocalToServer(); }catch(_){}
       // Server is the source of truth: pull people, tags, notes, and text meetings down.
       try{ await mergeServerState(); renderAll(); }catch(_){}
+      try{ await showMigrateBanner(); }catch(_){}   // surface local people not yet on the cloud (any DB name)
       // Then pull this user's own photo posts (private+public) — parallelized, render as they land.
       try{ await pullMyServerPosts(); renderAll(); }catch(_){}
       // Push any local-only photos up (no-op on a fresh device); local copies already render.
