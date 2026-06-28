@@ -510,7 +510,18 @@ async function scanLocalDiary(){
 async function showStorageDiag(){
   try{ if(document.getElementById("storeDiag")) return;
     const f=await scanLocalDiary();
-    const line=(f.all||[]).map(x=>x.db+": "+(x.err?"err":(x.people+" people / "+x.meetings+" moments / "+(x.withPhoto||0)+" with photo"))).join("   ·   ")||"no local databases";
+    // Link analysis on the richest DB: do the photo-bearing meetings actually point at people we have?
+    let analysis="";
+    try{
+      const ppl=f.people||[], mts=f.meetings||[];
+      const ids=new Set(ppl.map(p=>p&&p.id).filter(Boolean));
+      const photoMts=mts.filter(m=>m&&m.photo&&(m.photo instanceof Blob||(m.photo&&m.photo.size)));
+      const linked=photoMts.filter(m=>(m.personIds||[]).some(id=>ids.has(id))).length;
+      const orphan=photoMts.length-linked;
+      const peopleWithPhoto=ppl.filter(p=>p&&p.id&&photoMts.some(m=>(m.personIds||[]).includes(p.id))).length;
+      analysis=" || links: "+peopleWithPhoto+"/"+ppl.length+" people show a photo, "+orphan+" orphan photos";
+    }catch(_){}
+    const line=((f.all||[]).map(x=>x.db+": "+(x.err?"err":(x.people+" people / "+x.meetings+" moments / "+(x.withPhoto||0)+" with photo"))).join("   ·   ")||"no local databases")+analysis;
     const el=document.createElement("div"); el.id="storeDiag";
     el.style.cssText="position:fixed;left:10px;right:10px;top:10px;z-index:99998;background:#111;color:#fff;padding:11px 14px;"
       +"border-radius:12px;font:600 12.5px/1.45 system-ui,-apple-system,sans-serif;text-align:center;box-shadow:0 6px 22px rgba(0,0,0,.3)";
