@@ -496,12 +496,29 @@ async function scanLocalDiary(){
       const get=s=>new Promise(ok=>{ try{ const r=db.transaction(s,"readonly").objectStore(s).getAll(); r.onsuccess=()=>ok(r.result||[]); r.onerror=()=>ok([]); }catch(_){ ok([]); } });
       const people=stores.includes("people")?await get("people"):[];
       const meetings=stores.includes("meetings")?await get("meetings"):[];
-      all.push({db:name,people:people.length,meetings:meetings.length});
-      if(people.length>best.people.length) best={people,meetings,db:name};
+      const withPhoto=meetings.filter(m=>m&&m.photo&&(typeof Blob!=="undefined")&&(m.photo instanceof Blob||(m.photo&&m.photo.size))).length;
+      all.push({db:name,people:people.length,meetings:meetings.length,withPhoto});
+      if(people.length>best.people.length) best={people,meetings,db:name,withPhoto};
     }catch(_){ all.push({db:name,people:0,err:1}); }
     try{ db.close(); }catch(_){}
   }
   best.all=all; return best;
+}
+// Diagnostic (opt-in via ?diag): a one-line, on-screen summary of THIS device's local storage —
+// people / meetings / how many carry a photo Blob — so "are my photos actually on this device?"
+// is answered without the console. Tap to dismiss; auto-hides after 20s.
+async function showStorageDiag(){
+  try{ if(document.getElementById("storeDiag")) return;
+    const f=await scanLocalDiary();
+    const line=(f.all||[]).map(x=>x.db+": "+(x.err?"err":(x.people+" people / "+x.meetings+" moments / "+(x.withPhoto||0)+" with photo"))).join("   ·   ")||"no local databases";
+    const el=document.createElement("div"); el.id="storeDiag";
+    el.style.cssText="position:fixed;left:10px;right:10px;top:10px;z-index:99998;background:#111;color:#fff;padding:11px 14px;"
+      +"border-radius:12px;font:600 12.5px/1.45 system-ui,-apple-system,sans-serif;text-align:center;box-shadow:0 6px 22px rgba(0,0,0,.3)";
+    el.innerHTML='This device — '+esc(line)+' <span style="opacity:.55">· tap to close</span>';
+    el.onclick=()=>{ try{ el.remove(); }catch(_){} };
+    document.body.appendChild(el);
+    setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 20000);
+  }catch(_){}
 }
 // On-screen banner (mobile-friendly, no console) when this browser holds people not yet on the cloud:
 // shows which local DB they're in + a one-tap Sync, so the data is never invisible.
@@ -892,7 +909,13 @@ function applyMetTags(){
   }
 }
 // Local meetings carry an IndexedDB blob (object URL); remote-only posts carry a presigned URL.
-const photoURL=m=>(m&&m.remote?(m.photoUrl||""):(state.urls.get(m&&m.id)||""));
+// Local meetings render from a stable object URL of their IndexedDB Blob. Build it LAZILY here
+// (not only in the up-front loops) so a meeting whose Blob is present but missing from state.urls
+// — e.g. loaded after the last build pass — still shows its photo instead of falling to initials.
+const photoURL=m=>{ if(!m) return ""; if(m.remote) return m.photoUrl||"";
+  let u=state.urls.get(m.id);
+  if(!u && m.photo){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
+  return u||""; };
 const personById=id=>state.people.find(p=>p.id===id);
 const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
 // Avatar photo: only a LOCAL Blob (stable object URL). Skip remote/server posts — their presigned
@@ -1965,6 +1988,7 @@ window._seedDemo=async function(){
 
 /* ========================= boot ========================= */
 (async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName();
+    if(/[?&]diag/.test(location.search)) showStorageDiag();   // ?diag → on-screen local-storage summary (people/moments/photos)
     if(HI.authed()){ (async()=>{ await hiSyncProfile(); await hiRefreshConsent();
       // First-login on this device: push local people/meetings up (idempotent, once per account).
       try{ await migrateLocalToServer(); }catch(_){}
