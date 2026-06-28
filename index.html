@@ -385,7 +385,10 @@ const HI={
   async post(path,body,withAuth){
     const headers={"content-type":"application/json"};
     if(withAuth){ const s=this.session(); if(s&&s.access_token) headers.authorization="Bearer "+s.access_token; }
-    const r=await fetch(this.base+path,{method:"POST",headers,body:JSON.stringify(body||{})});
+    // /api/* is OUR same-origin backend (hirey.ai → CloudFront → secretary); everything else
+    // (/v1/*, capabilities) is the Hi platform at this.base. Same signature either way.
+    const url=/^\/api\//.test(path)?path:(this.base+path);
+    const r=await fetch(url,{method:"POST",headers,body:JSON.stringify(body||{})});
     let j={}; try{ j=await r.json(); }catch(_){}
     if(!r.ok){ const e=new Error(j.error||j.error_code||("http_"+r.status)); e.status=r.status; e.body=j; throw e; }
     return j;
@@ -399,12 +402,91 @@ const HI={
   onToken(tok){
     const ttl=(tok.expires_in||86400)*1000;
     this.save({ access_token:tok.access_token, expires_at:Date.now()+ttl-60000,
-      agent_id:tok.agent_id, workspace_id:tok.workspace_id, display_name:(this.session()&&this.session().display_name)||"" });
+      agent_id:tok.agent_id, workspace_id:tok.workspace_id, customer_id:tok.customer_id||tok.owner_customer_id||(this.session()&&this.session().customer_id)||null,
+      display_name:(this.session()&&this.session().display_name)||"" });
   },
 };
+
+/* ========================= MET cloud backend (/api/met/*) =========================
+   Cross-device source of truth for the structured records: people, tags, notes, and
+   text-only meetings. SAME-ORIGIN relative paths (hirey.ai → CloudFront → secretary),
+   bearer = HI.session().access_token. Offline-first: every call is best-effort and
+   NEVER throws to the caller — the local IndexedDB write is the one that must succeed.
+   Photo BYTES never go here (they ride hi.owner-images); a meeting only carries its
+   image_id/hiImageId so the photo can be re-fetched cross-device.
+   extra_json carries the WHOLE app object losslessly; named columns are query helpers. */
+const MET={
+  // person → backend body. extra_json is the full app person object (round-trips losslessly).
+  personBody(p){ return {
+    id:p.id, name:p.name||"", name_lower:p.nameLower||norm(p.name||""),
+    headline:p.headline||"", title:p.title||"", note:p.note||"", contact:p.contact||"",
+    follow_cadence:p.followCadence||"off", last_ping:p.lastPing||0,
+    hi_owner_json:JSON.stringify(p.hiOwner||null), extra_json:JSON.stringify(p) }; },
+  // meeting → backend body. NO photo Blob; extra_json holds the structural fields only.
+  meetingBody(m){ return {
+    id:m.id, created_at:m.createdAt||Date.now(), caption:m.caption||"",
+    image_id:m.hiImageId||null, public:m.hiPublic?1:0, person_ids:m.personIds||[],
+    extra_json:JSON.stringify({ id:m.id, createdAt:m.createdAt, caption:m.caption,
+      personIds:m.personIds, hiImageId:m.hiImageId, hiPublic:m.hiPublic }) }; },
+  // backend person row → app person object. extra_json is the truth; named cols are fallback.
+  personFromRow(row){ if(!row) return null;
+    if(row.extra_json){ try{ const p=JSON.parse(row.extra_json); if(p&&p.id) return p; }catch(_){} }
+    let hiOwner=null; try{ hiOwner=row.hi_owner_json?JSON.parse(row.hi_owner_json):null; }catch(_){}
+    return { id:row.id, name:row.name||"", nameLower:row.name_lower||norm(row.name||""),
+      headline:row.headline||"", title:row.title||"", note:row.note||"", contact:row.contact||"",
+      phone:"", email:"", introBy:"", followCadence:row.follow_cadence||"off",
+      lastPing:row.last_ping||0, hiOwner, createdAt:row.created_at||Date.now() }; },
+  // backend meeting row → app meeting object (no Blob; personIds reconciled from tags later).
+  meetingFromRow(row){ if(!row) return null; let x={};
+    if(row.extra_json){ try{ x=JSON.parse(row.extra_json)||{}; }catch(_){} }
+    return { id:row.id||x.id, createdAt:row.created_at||x.createdAt||Date.now(),
+      caption:(row.caption!=null?row.caption:x.caption)||"",
+      hiImageId:row.image_id||x.hiImageId||null,
+      hiPublic:(row.public!=null?!!row.public:!!x.hiPublic),
+      personIds:Array.isArray(row.person_ids)?row.person_ids:(x.personIds||[]) }; },
+  async state(){ if(!HI.authed()) return null;
+    try{ return await HI.post("/api/met/state",{},true); }catch(_){ return null; } },
+  async putPerson(p){ if(!HI.authed()||!p) return null;
+    try{ return await HI.post("/api/met/person",this.personBody(p),true); }catch(_){ return null; } },
+  async delPerson(id){ if(!HI.authed()||!id) return null;
+    try{ return await HI.post("/api/met/person/"+encodeURIComponent(id)+"/delete",{},true); }catch(_){ return null; } },
+  async putMeeting(m){ if(!HI.authed()||!m) return null;
+    try{ return await HI.post("/api/met/meeting",this.meetingBody(m),true); }catch(_){ return null; } },
+  async delMeeting(id){ if(!HI.authed()||!id) return null;
+    try{ return await HI.post("/api/met/meeting/"+encodeURIComponent(id)+"/delete",{},true); }catch(_){ return null; } },
+  async importAll(persons,meetings){ if(!HI.authed()) return null;
+    try{ return await HI.post("/api/met/import",{
+      persons:(persons||[]).map(p=>this.personBody(p)),
+      meetings:(meetings||[]).map(m=>this.meetingBody(m)) },true); }catch(_){ return null; } },
+};
+
+/* Write wrappers: local IndexedDB stays the must-succeed write; the cloud push is
+   fire-and-forget (never blocks, never throws). All dbPut/dbDel call points for
+   people & meetings go through these so every local mutation also reaches the server. */
+async function savePerson(p){ const r=await dbPut("people",p); if(HI.authed()) MET.putPerson(p); return r; }
+async function removePerson(id){ const r=await dbDel("people",id); if(HI.authed()) MET.delPerson(id); return r; }
+async function saveMeeting(m){ const r=await dbPut("meetings",m); if(HI.authed()) MET.putMeeting(m); return r; }
+async function removeMeeting(id){ const r=await dbDel("meetings",id); if(HI.authed()) MET.delMeeting(id); return r; }
+
+// First-login migration: push this device's local IndexedDB (people + meetings) to the cloud
+// once per device per account. import is idempotent (upsert by id) so a re-run is harmless.
+async function migrateLocalToServer(){
+  if(!HI.authed()) return;
+  const s=HI.session()||{}; const cid=s.customer_id||s.workspace_id||s.agent_id||"me";
+  const flag="wimt_migrated_"+cid;
+  if(localStorage.getItem(flag)) return;
+  try{
+    const people=await dbGetAll("people");
+    const meetings=await dbGetAll("meetings");
+    if(people.length||meetings.length){ await MET.importAll(people,meetings); }
+    localStorage.setItem(flag,String(Date.now()));
+  }catch(_){ /* leave the flag unset so we retry on next sign-in/boot */ }
+}
+
 async function hiSyncProfile(){ if(!HI.authed()) return null;
   try{ const r=await HI.call("hi.owners",{action:"get"}); const p=r.owner_profile||r;
-    HI.profile=p; const s=HI.session()||{}; s.display_name=p.display_name||s.display_name; s.owner_public_url=r.owner_public_url; HI.save(s);
+    HI.profile=p; const s=HI.session()||{}; s.display_name=p.display_name||s.display_name; s.owner_public_url=r.owner_public_url;
+    s.customer_id=s.customer_id||p.customer_id||p.owner_customer_id||r.customer_id||null; HI.save(s);
     return p;
   }catch(e){ if(e.status===401||e.body&&e.body.error==="token_expired"){ HI.clear(); } return null; } }
 async function hiRefreshConsent(){ if(!HI.authed()) return;
@@ -474,7 +556,7 @@ async function syncMeetingToHi(meeting){
   try{
     const id=await uploadMeetingPhoto(meeting);
     if(id){ meeting.hiImageId=id; meeting.hiSyncedAt=Date.now();
-      try{ await dbPut("meetings",meeting); }catch(_){} }
+      try{ await saveMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
   }catch(e){ /* offline / transient — local copy is intact, retried on next save or via syncPendingPhotos */ }
 }
 // Best-effort backfill: push any signed-in user's local photos that aren't on the server yet.
@@ -514,7 +596,7 @@ async function pullMyServerPosts(){
     if(local){
       // Server is truth for visibility — reconcile the toggle state.
       const pub=(img.visibility_status||img.visibility||"").toLowerCase()==="public";
-      if(!!local.hiPublic!==pub){ local.hiPublic=pub; try{ await dbPut("meetings",local); }catch(_){} }
+      if(!!local.hiPublic!==pub){ local.hiPublic=pub; try{ await saveMeeting(local); }catch(_){} }
       continue;
     }
     remoteImgs.push(img);
@@ -533,6 +615,8 @@ async function pullMyServerPosts(){
       personIds:[]
     });
   }));
+  // Attach server tags to the freshly-built remote items (keyed by image_id).
+  if(typeof applyMetTags==="function") applyMetTags();
 }
 // Take an already-public post back to PRIVATE (unpublish). set_visibility=private genuinely
 // removes the image from the /met feed. (The reverse — private→public — can't be done with
@@ -544,7 +628,7 @@ async function unpublishMeeting(meeting){
       visibility_status:"private" });
     meeting.hiPublic=false;
     // Only local meetings persist to IndexedDB; remote pseudo-records are session-only (server is truth).
-    if(!meeting.remote){ try{ await dbPut("meetings",meeting); }catch(_){} }
+    if(!meeting.remote){ try{ await saveMeeting(meeting); }catch(_){} }   // sync the new public flag to the cloud backend
     return true;
   }catch(e){ toast("Couldn't change visibility"); return false; }
 }
@@ -600,14 +684,14 @@ async function publishMeetingToFeed(meeting){
   if(!newId){ toast("Couldn't publish — try again"); return false; }
   meeting.hiImageId=newId; meeting.hiPublic=true; meeting.hiSyncedAt=Date.now();
   // Persist local meetings; remote pseudo-records are session-only (server is the truth on next pull).
-  if(!meeting.remote){ try{ await dbPut("meetings",meeting); }catch(_){} }
+  if(!meeting.remote){ try{ await saveMeeting(meeting); }catch(_){} }   // sync the new image_id + public flag to the cloud backend
   // Drop the old image now that the new feed copy is finalized — avoids leaving an orphan.
   try{ await HI.call("hi.owner-images",{ action:"delete", image_id:oldId }); }catch(_){}
   return true;
 }
 
 /* ========================= state / helpers ========================= */
-const state={ people:[], meetings:[], remote:[], urls:new Map() };
+const state={ people:[], meetings:[], remote:[], urls:new Map(), tagsByMeeting:null, tagsByImage:null };
 // Local meetings (with blobs) + server-only posts pulled for this signed-in user, newest first.
 // Local wins when both exist (it carries the tagged people); remote fills cross-device gaps.
 function allMeetings(){ return state.meetings.concat(state.remote||[]).sort((a,b)=>b.createdAt-a.createdAt); }
@@ -629,6 +713,83 @@ async function loadAll(){
   for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
   for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
 }
+
+/* ========================= MET cloud merge (server is source of truth) =========================
+   Pulls /api/met/state and reconciles it into in-memory state + the IndexedDB cache.
+   - persons: server wins by id; local-only persons are kept (they get pushed up by migration).
+   - meetings: server reconciles caption/hiPublic on matching local meetings (photo Blob kept);
+     server-only TEXT meetings (no image_id) are added as local cache rows; server-only PHOTO
+     meetings (have image_id) are left for pullMyServerPosts to surface as remote items — de-dup
+     is by image_id (a local meeting carrying that hiImageId stops pullMyServerPosts duplicating).
+   - tags: meeting_id→[person_id] AND image_id→[person_id] maps are stashed on state, applied by
+     applyMetTags() to every meeting (local + server-only + remote owner-image post). This is what
+     makes people show up and posts carry their tagged names cross-device.
+   Best-effort: any failure leaves the local view intact. */
+async function mergeServerState(){
+  if(!HI.authed()) return false;
+  const data=await MET.state();
+  if(!data) return false;
+  // -------- persons: server wins by id --------
+  const localPeople=new Map(state.people.map(p=>[p.id,p]));
+  for(const row of (data.persons||[])){
+    const sp=MET.personFromRow(row); if(!sp||!sp.id) continue;
+    localPeople.set(sp.id,sp);
+    try{ await dbPut("people",sp); }catch(_){}   // refresh cache only — do NOT echo back to server
+  }
+  state.people=Array.from(localPeople.values());
+  // -------- meetings: reconcile locals; add server-only text meetings --------
+  // (correlate every server meeting_id → image_id for tag mapping, even when not cached locally)
+  const imageOfMeeting=new Map();
+  const localMeet=new Map(state.meetings.map(m=>[m.id,m]));
+  for(const row of (data.meetings||[])){
+    const sm=MET.meetingFromRow(row); if(!sm||!sm.id) continue;
+    if(sm.hiImageId) imageOfMeeting.set(sm.id,sm.hiImageId);
+    const local=localMeet.get(sm.id);
+    if(local){
+      // Server is truth for caption/visibility/image_id; keep the local photo Blob + object URL.
+      local.caption=sm.caption; local.hiPublic=sm.hiPublic;
+      if(sm.hiImageId) local.hiImageId=sm.hiImageId;
+      try{ await dbPut("meetings",local); }catch(_){}
+    } else if(!sm.hiImageId){
+      // Server-only TEXT meeting (no photo): cache it locally so it renders everywhere.
+      localMeet.set(sm.id,sm);
+      try{ await dbPut("meetings",sm); }catch(_){}
+    }
+    // Server-only PHOTO meeting (has image_id, no local copy): intentionally NOT cached into
+    // state.meetings — it's surfaced by pullMyServerPosts as a remote item (which fetches the
+    // presigned photo URL). Tags reach it via the image_id map below.
+  }
+  state.meetings=Array.from(localMeet.values()).sort((a,b)=>b.createdAt-a.createdAt);
+  // rebuild object URLs for any newly-cached meetings that happen to carry a Blob
+  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
+  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  // -------- tags: stash maps, apply after pulls --------
+  const byMeeting=new Map(), byImage=new Map();
+  for(const t of (data.tags||[])){
+    if(!t||!t.meeting_id||!t.person_id) continue;
+    if(!byMeeting.has(t.meeting_id)) byMeeting.set(t.meeting_id,[]);
+    byMeeting.get(t.meeting_id).push(t.person_id);
+    const img=imageOfMeeting.get(t.meeting_id);
+    if(img){ if(!byImage.has(img)) byImage.set(img,[]); byImage.get(img).push(t.person_id); }
+  }
+  state.tagsByMeeting=byMeeting; state.tagsByImage=byImage;
+  applyMetTags();
+  return true;
+}
+// Apply the server's tag maps to every meeting (local, server-only, and remote owner-image posts).
+// Remote items key off image_id (their id is "hi:<imageId>"); locals key off meeting id.
+function applyMetTags(){
+  const byMeeting=state.tagsByMeeting, byImage=state.tagsByImage;
+  if(!byMeeting&&!byImage) return;
+  const seen=new Set(state.people.map(p=>p.id));
+  const onlyKnown=ids=>Array.from(new Set(ids)).filter(id=>seen.has(id));
+  for(const m of state.meetings){
+    if(byMeeting&&byMeeting.has(m.id)) m.personIds=onlyKnown(byMeeting.get(m.id));
+  }
+  for(const m of (state.remote||[])){
+    if(byImage&&m.hiImageId&&byImage.has(m.hiImageId)) m.personIds=onlyKnown(byImage.get(m.hiImageId));
+  }
+}
 // Local meetings carry an IndexedDB blob (object URL); remote-only posts carry a presigned URL.
 const photoURL=m=>(m&&m.remote?(m.photoUrl||""):(state.urls.get(m&&m.id)||""));
 const personById=id=>state.people.find(p=>p.id===id);
@@ -642,7 +803,7 @@ function avaHTML(p){ const c=pcolor(p.name), av=latestPhotoFor(p.id);
 async function resolvePerson(name){ const n=norm(name); if(!n) return null;
   let p=state.people.find(p=>p.nameLower===n); if(p) return p.id;
   p={ id:uid(), name:name.trim(), nameLower:n, note:"", phone:"", email:"", introBy:"", followCadence:"off", lastPing:0, followUp:false, createdAt:Date.now() };
-  await dbPut("people",p); state.people.push(p); return p.id; }
+  await savePerson(p); state.people.push(p); return p.id; }
 
 function downscale(file,max=1400,q=.85){ return new Promise(res=>{ const img=new Image();
   img.onload=()=>{ let{width:w,height:h}=img; if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
@@ -701,7 +862,7 @@ function wireNameInput(queryEl, suggestEl, addFn, extraFn){
 async function applyPendingHiLinks(){
   if(!pending.hi) return;
   for(const k of Object.keys(pending.hi)){ const hi=pending.hi[k];
-    const p=state.people.find(x=>x.nameLower===k); if(p&&!p.hiOwner){ p.hiOwner=hi; await dbPut("people",p); } }
+    const p=state.people.find(x=>x.nameLower===k); if(p&&!p.hiOwner){ p.hiOwner=hi; await savePerson(p); } }
 }
 
 /* ========================= capture sheet ========================= */
@@ -797,7 +958,7 @@ async function saveMoment(shareAfter){
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
   await applyPendingHiLinks();
   const meeting={ id:uid(), createdAt:Date.now(), photo:blob, caption:note, personIds:ids, hiPublic:wantPublic };
-  await dbPut("meetings",meeting);
+  await saveMeeting(meeting);
   if(pending.url) URL.revokeObjectURL(pending.url); pending={blob:null,url:"",names:[],makePublic:false};
   await loadAll(); renderAll(); switchView("today");
   // Offline-first: local save already done above. If signed in + has a photo, push the copy to
@@ -880,7 +1041,7 @@ function dictatePerson(pid){ if(!SR) return; let r2; try{ r2=new SR(); }catch(_)
     if(f.email) p.email=f.email; if(f.phone) p.phone=f.phone; if(f.introBy) p.introBy=f.introBy;
     if(f.followCadence){ p.followCadence=f.followCadence; if(!p.lastPing) p.lastPing=Date.now(); }
     p.note=(p.note?p.note+" ":"")+v;
-    await dbPut("people",p); renderPerson(pid); renderAll(); toast("Filled from voice — check the fields"); };
+    await savePerson(p); renderPerson(pid); renderAll(); toast("Filled from voice — check the fields"); };
   try{ r2.start(); }catch(_){ if(btn) btn.classList.remove("live"); } }
 function renderPerson(pid){ const p=personById(pid); if(!p) return;
   const ms=state.meetings.filter(m=>m.personIds.includes(pid)); const last=ms[0]?relDay(ms[0].createdAt):"—";
@@ -927,20 +1088,20 @@ function renderPerson(pid){ const p=personById(pid); if(!p) return;
   document.getElementById("pdInvite").onclick=()=>sendCard(pid);
   const pdV=document.getElementById("pdVcard"); if(pdV) pdV.onclick=()=>saveContact(p);
   const hiSendBtn=document.getElementById("hiSend"); if(hiSendBtn) hiSendBtn.onclick=()=>hiInvite(pid);
-  const hiC=document.getElementById("hiContact"); if(hiC) hiC.addEventListener("change",async e=>{ p.contact=e.target.value.trim(); await dbPut("people",p); });
-  document.getElementById("pdNote").addEventListener("change",async e=>{ p.note=e.target.value; await dbPut("people",p); });
-  const saveField=async(k,el)=>{ p[k]=el.value.trim(); await dbPut("people",p); renderAll(); };
+  const hiC=document.getElementById("hiContact"); if(hiC) hiC.addEventListener("change",async e=>{ p.contact=e.target.value.trim(); await savePerson(p); });
+  document.getElementById("pdNote").addEventListener("change",async e=>{ p.note=e.target.value; await savePerson(p); });
+  const saveField=async(k,el)=>{ p[k]=el.value.trim(); await savePerson(p); renderAll(); };
   document.getElementById("pdPhone").addEventListener("change",e=>saveField("phone",e.target));
   document.getElementById("pdEmail").addEventListener("change",e=>saveField("email",e.target));
   document.getElementById("pdIntro").addEventListener("change",e=>saveField("introBy",e.target));
   if(document.getElementById("pdVoice")) document.getElementById("pdVoice").onclick=()=>dictatePerson(pid);
-  document.querySelectorAll("#sheet2 .cad").forEach(b=>b.onclick=async()=>{ p.followCadence=b.dataset.c; if(p.followCadence!=="off"&&!p.lastPing) p.lastPing=Date.now(); await dbPut("people",p); renderPerson(pid); renderAll(); });
+  document.querySelectorAll("#sheet2 .cad").forEach(b=>b.onclick=async()=>{ p.followCadence=b.dataset.c; if(p.followCadence!=="off"&&!p.lastPing) p.lastPing=Date.now(); await savePerson(p); renderPerson(pid); renderAll(); });
   if(document.getElementById("pdIcs")) document.getElementById("pdIcs").onclick=()=>shareICS(p);
-  if(document.getElementById("pdPinged")) document.getElementById("pdPinged").onclick=async()=>{ p.lastPing=Date.now(); await dbPut("people",p); renderPerson(pid); renderAll(); toast("Marked pinged"); };
-  document.getElementById("pdRename").onclick=async()=>{ const nn=prompt("New name",p.name); if(nn&&nn.trim()){ p.name=nn.trim(); p.nameLower=norm(nn); await dbPut("people",p); renderPerson(pid); renderAll(); } };
+  if(document.getElementById("pdPinged")) document.getElementById("pdPinged").onclick=async()=>{ p.lastPing=Date.now(); await savePerson(p); renderPerson(pid); renderAll(); toast("Marked pinged"); };
+  document.getElementById("pdRename").onclick=async()=>{ const nn=prompt("New name",p.name); if(nn&&nn.trim()){ p.name=nn.trim(); p.nameLower=norm(nn); await savePerson(p); renderPerson(pid); renderAll(); } };
   document.getElementById("pdDelete").onclick=async()=>{ if(!confirm(`Delete ${p.name}? Their moments stay but lose this tag.`)) return;
-    for(const m of state.meetings){ if(m.personIds.includes(pid)){ m.personIds=m.personIds.filter(x=>x!==pid); await dbPut("meetings",m); } }
-    await dbDel("people",pid); hideSheet("sheet2","scrim2"); await loadAll(); renderAll(); };
+    for(const m of state.meetings){ if(m.personIds.includes(pid)){ m.personIds=m.personIds.filter(x=>x!==pid); await saveMeeting(m); } }
+    await removePerson(pid); hideSheet("sheet2","scrim2"); await loadAll(); renderAll(); };
 }
 
 /* ========================= sheets / toast ========================= */
@@ -1032,7 +1193,7 @@ function retag(mid){ const m=state.meetings.find(x=>x.id===mid); if(!m) return;
     const stray=document.getElementById("nameInput").value.trim(); if(stray) addName(stray);
     const ids=[...m.personIds]; for(const n of pending.names){ const id=await resolvePerson(n); if(id&&!ids.includes(id)) ids.push(id); }
     m.personIds=ids; const note=document.getElementById("capNote").value.trim(); if(note) m.caption=note;
-    await dbPut("meetings",m); closeCaptureSheet(); await loadAll(); renderAll(); toast("Tags updated"); }; }
+    await saveMeeting(m); closeCaptureSheet(); await loadAll(); renderAll(); toast("Tags updated"); }; }
 
 function renderToday(){ const start=new Date().setHours(0,0,0,0);
   const today=allMeetings().filter(m=>m.createdAt>=start); const el=document.getElementById("todayList");
@@ -1145,7 +1306,7 @@ async function saveVoiceMoment(shareAfter){
   if(!pending.names.length&&!note){ toast("Say or type something first"); return; }
   const ids=[]; for(const n of pending.names){ const id=await resolvePerson(n); if(id) ids.push(id); }
   await applyPendingHiLinks();
-  await dbPut("meetings",{ id:uid(), createdAt:Date.now(), photo:null, caption:note, personIds:ids });
+  await saveMeeting({ id:uid(), createdAt:Date.now(), photo:null, caption:note, personIds:ids });
   stopRec(); pending={blob:null,url:"",names:[]};
   await loadAll(); renderAll(); switchView("today");
   if(shareAfter && ids.length){ await presentCard(ids[0], {sheet:"sheet",scrim:"scrim",backLabel:"Done",onBack:()=>hideSheet("sheet","scrim")}); }
@@ -1308,7 +1469,7 @@ function renderAccount(){
     document.getElementById("acctEdit").onclick=hiProfileEditor;
     document.getElementById("acctContact").onclick=myContactEditor;
     const v=document.getElementById("acctView"); if(v&&url) v.onclick=()=>window.open(url,"_blank");
-    document.getElementById("acctOut").onclick=()=>{ HI.clear(); state.remote=[]; hideSheet("sheet","scrim"); renderAll(); updateMe(); toast("Signed out — your diary stays here"); };
+    document.getElementById("acctOut").onclick=()=>{ HI.clear(); state.remote=[]; state.tagsByMeeting=null; state.tagsByImage=null; hideSheet("sheet","scrim"); renderAll(); updateMe(); toast("Signed out — your diary stays here"); };
     return;
   }
   s.innerHTML=`
@@ -1400,9 +1561,71 @@ async function finishAuth(tok){
   hideSheet("sheet","scrim"); renderAll(); updateMe();
   const nm=HI.myName(); toast(nm?("Signed in — welcome, "+nm.split(" ")[0]):"Signed in to HiRey");
   if(!HI.myName()) hiProfileEditor();
-  // Backfill local→server, then pull server→local so the app shows the same canonical data as /met.
-  (async()=>{ try{ await syncPendingPhotos(); }catch(_){}
-    try{ await pullMyServerPosts(); renderAll(); }catch(_){} })();
+  // Backfill local→server (structured records once + photos), then pull server→local so the app
+  // shows the same canonical data as /met, cross-device.
+  (async()=>{
+    try{ await migrateLocalToServer(); }catch(_){}        // first-login: push local people/meetings up
+    try{ await mergeServerState(); renderAll(); }catch(_){} // pull people/tags/text-meetings down
+    try{ await syncPendingPhotos(); }catch(_){}            // push any local-only photos up
+    try{ await pullMyServerPosts(); renderAll(); }catch(_){} // surface server-only photo posts
+  })();
+  maybeOfferTextBind();
+}
+
+/* ===== "Text us to turn on alerts" — non-blocking nudge for phone-less users =====
+   Google/email-only users have no phone, so they get NO push when someone replies (email
+   alerts are easy to miss). workspace_overview.phone_for_notify.should_offer flags exactly
+   that case. The PRIMARY bind path is "text us": tap → Messages opens prefilled with a one-time
+   HI-xxxx nonce → user hits send → hi-secretary relays it to hi-platform which binds the phone
+   (no OTP). iMessage (blue) is preferred on Apple; SMS otherwise. Never blocks messaging. */
+async function maybeOfferTextBind(){
+  try{
+    if(!HI.authed()) return;
+    if(localStorage.getItem("wim_textbind_off")) return;          // user dismissed before
+    if(document.getElementById("tbNudge")) return;                // already showing
+    let ov; try{ ov=await HI.call("workspace_overview",{action:"get"}); }catch(_){ return; }
+    const pf=ov&&ov.phone_for_notify;
+    if(!pf||!pf.should_offer) return;                             // has a phone / unbound / feature off
+    showTextBindNudge(pf.benefit||"Add your phone to get a text the moment someone replies.");
+  }catch(_){}
+}
+function showTextBindNudge(benefit){
+  const el=document.createElement("div"); el.id="tbNudge";
+  el.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;max-width:520px;margin:0 auto;z-index:60;background:var(--card);color:var(--ink);border:.5px solid var(--line-2);border-radius:16px;box-shadow:var(--shadow-sm);padding:14px 16px;font-size:14px;line-height:1.45";
+  el.innerHTML=`<div style="display:flex;gap:10px;align-items:flex-start">
+    <div style="flex:1">
+      <div style="font-weight:650;margin-bottom:3px">Turn on reply alerts</div>
+      <div style="color:var(--ink-faint)">${esc(benefit)}</div>
+      <div id="tbHint" style="color:var(--ink-faint);font-size:12.5px;margin-top:8px;display:none"></div>
+    </div>
+    <button id="tbClose" aria-label="Dismiss" style="background:none;border:none;color:var(--ink-faint);font-size:20px;line-height:1;cursor:pointer;padding:0 2px">&times;</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button id="tbGo" class="btn btn-primary" style="flex:1">Text us to turn on</button>
+  </div>`;
+  document.body.appendChild(el);
+  document.getElementById("tbClose").onclick=()=>{ localStorage.setItem("wim_textbind_off","1"); el.remove(); };
+  document.getElementById("tbGo").onclick=startTextBind;
+}
+async function startTextBind(){
+  const hint=document.getElementById("tbHint");
+  let d; try{ d=await HI.post("/v1/text-bind/start",{},true); }catch(e){ toast("Couldn't start — try again"); return; }
+  if(!d||d.error||!d.links){ toast("Couldn't start — try again"); return; }
+  const ua=navigator.userAgent||"";
+  const isIOS=/iPhone|iPad|iPod/i.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  const isAndroid=/Android/i.test(ua);
+  const L=d.links;
+  // iMessage 优先(Apple),否则按平台选 sms 链接。
+  const link=isIOS?(L.imessage||L.sms_ios):isAndroid?L.sms_android:(L.imessage||L.sms_ios);
+  if((isIOS||isAndroid)&&link){
+    if(hint){ hint.style.display="block"; hint.textContent="Messages will open with the text ready — just hit send. Alerts turn on automatically."; }
+    location.href=link;                                            // 拉起 Messages,正文已预填,用户只按发送
+    return;
+  }
+  // 桌面:打不开 Messages → 给号码 + 预填正文让用户在手机上发(iMessage 号优先展示)。
+  const num=d.imessage_number||d.sms_number||"";
+  if(hint){ hint.style.display="block";
+    hint.innerHTML=`On your phone, text <b>${esc(d.body||"")}</b> to <b>${esc(num)}</b> — alerts turn on the moment it arrives.`; }
 }
 function hiProfileEditor(){
   const p=HI.profile||{};
@@ -1476,7 +1699,7 @@ async function hiInvite(pid){
     if(isEmail) body.email=contact; else body.phone=contact;
     if(p.note) body.note=p.note;
     await HI.call("hi.connectors",body);
-    p.contact=contact; p.invited=true; p.hiInvited=true; await dbPut("people",p);
+    p.contact=contact; p.invited=true; p.hiInvited=true; await savePerson(p);
     await hiRefreshConsent();
     renderPerson(pid); renderAll();
     toast(p.name.split(" ")[0]+" was invited to HiRey");
@@ -1495,7 +1718,7 @@ async function invitePerson(pid){ const p=personById(pid); if(!p) return;
     if(!sent&&navigator.share){ await navigator.share({text:msg,url}); sent=true; }
   }catch(e){ if(e&&e.name==="AbortError") return; }
   if(!sent){ try{ await navigator.clipboard.writeText(msg); toast("Invite copied — paste it to "+first); }catch(_){ prompt("Copy this invite:",msg); } }
-  if(!p.invited){ p.invited=true; await dbPut("people",p); renderPerson(pid); renderAll(); }
+  if(!p.invited){ p.invited=true; await savePerson(p); renderPerson(pid); renderAll(); }
   if(sent) toast("Invite ready for "+first);
 }
 
@@ -1541,7 +1764,7 @@ async function shareCard(cardBlob, p, includeContact){ const first=p.name.split(
   }catch(e){ if(e&&e.name==="AbortError") return false; }
   if(!sent){ try{ await navigator.clipboard.writeText(text); toast("Link copied — paste it to "+first); }catch(_){}
     const a=document.createElement("a"); a.href=URL.createObjectURL(cardBlob); a.download="we-met-"+first+".jpg"; document.body.appendChild(a); a.click(); a.remove(); }
-  if(!p.invited){ p.invited=true; await dbPut("people",p); renderAll(); }
+  if(!p.invited){ p.invited=true; await savePerson(p); renderAll(); }
   return sent;
 }
 async function shareCardPublic(cardBlob, p){ const first=p.name.split(" ")[0];
@@ -1597,12 +1820,15 @@ window._seedDemo=async function(){
 /* ========================= boot ========================= */
 (async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName();
     if(HI.authed()){ (async()=>{ await hiSyncProfile(); await hiRefreshConsent();
-      // Server is the source of truth: pull this user's own posts (private+public) — parallelized,
-      // render as soon as they land. (Was pulled twice on boot = double the round-trips.)
+      // First-login on this device: push local people/meetings up (idempotent, once per account).
+      try{ await migrateLocalToServer(); }catch(_){}
+      // Server is the source of truth: pull people, tags, notes, and text meetings down.
+      try{ await mergeServerState(); renderAll(); }catch(_){}
+      // Then pull this user's own photo posts (private+public) — parallelized, render as they land.
       try{ await pullMyServerPosts(); renderAll(); }catch(_){}
       // Push any local-only photos up (no-op on a fresh device); local copies already render.
       try{ await syncPendingPhotos(); renderAll(); }catch(_){}
-    })(); } }
+      maybeOfferTextBind(); })(); } }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
 </body>
