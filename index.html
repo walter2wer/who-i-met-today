@@ -625,10 +625,34 @@ async function syncMeetingToHi(meeting){
       try{ await saveMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
   }catch(e){ /* offline / transient — local copy is intact, retried on next save or via syncPendingPhotos */ }
 }
-// Best-effort backfill: push any signed-in user's local photos that aren't on the server yet.
+// Backfill: push any signed-in user's local photos that aren't on the server yet, so the photo
+// BYTES (not just names) reach the cloud and render on every device + on hirey.ai/met. Uploaded
+// PRIVATE (wantPublic=!!m.hiPublic, default false) — a personal diary, never the public feed.
+// Was strictly sequential (N×latency → minutes on a phone, dies if the tab is backgrounded mid-run);
+// now concurrency-capped parallel + an on-screen progress bar so the user keeps the page open
+// until every photo lands. Idempotent: each meeting skips once it has an hiImageId, so re-running
+// resumes where it left off.
 async function syncPendingPhotos(){
   if(!HI.authed()) return;
-  for(const m of state.meetings){ if(m.photo && !m.hiImageId){ await syncMeetingToHi(m); } }
+  const pending=state.meetings.filter(m=>m.photo && !m.hiImageId);
+  if(!pending.length) return;
+  const total=pending.length; let done=0;
+  let el=document.getElementById("photoSyncBar");
+  if(!el){ el=document.createElement("div"); el.id="photoSyncBar";
+    el.style.cssText="position:fixed;left:12px;right:12px;bottom:84px;z-index:99999;background:#111;color:#fff;"
+      +"padding:13px 16px;border-radius:14px;font:600 14px/1.45 system-ui,-apple-system,sans-serif;"
+      +"box-shadow:0 8px 28px rgba(0,0,0,.32);text-align:center";
+    document.body.appendChild(el); }
+  const paint=()=>{ el.textContent = done<total
+    ? ("☁️ Uploading your photos to the cloud… "+done+"/"+total+" · keep this page open")
+    : ("✓ All "+total+" photos are now in the cloud"); };
+  paint();
+  const CONC=4; let idx=0;
+  async function worker(){ while(idx<pending.length){ const m=pending[idx++];
+    try{ await syncMeetingToHi(m); }catch(_){} done++; paint(); } }
+  await Promise.all(Array.from({length:Math.min(CONC,pending.length)},()=>worker()));
+  setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 3500);
+  try{ renderAll(); }catch(_){}
 }
 /* ========================= pull DOWN: server is the source of truth =========================
    When signed in, the server holds the canonical copy of the user's own photo posts. We list
