@@ -794,11 +794,14 @@ function applyMetTags(){
 const photoURL=m=>(m&&m.remote?(m.photoUrl||""):(state.urls.get(m&&m.id)||""));
 const personById=id=>state.people.find(p=>p.id===id);
 const meetCount=pid=>state.meetings.filter(m=>m.personIds.includes(pid)).length;
-const latestPhotoFor=pid=>{ const m=state.meetings.find(m=>m.personIds.includes(pid)&&m.photo); return m?photoURL(m):""; };
+// Avatar photo: only a LOCAL Blob (stable object URL). Skip remote/server posts — their presigned
+// URLs expire, leaving a broken "?" image on the People circles. No local photo → initials.
+const latestPhotoFor=pid=>{ const m=state.meetings.find(m=>m.personIds.includes(pid)&&m.photo&&!m.remote); return m?photoURL(m):""; };
 function avaHTML(p){ const c=pcolor(p.name), av=latestPhotoFor(p.id);
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
-  return av?`<img class="ava" src="${av}" style="${ring}">`
-    :`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(p.name)}</div>`; }
+  const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(p.name)}</div>`;
+  // onerror → fall back to initials so a stale/broken photo URL never shows a broken-image "?".
+  return av?`<img class="ava" src="${av}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
 
 async function resolvePerson(name){ const n=norm(name); if(!n) return null;
   let p=state.people.find(p=>p.nameLower===n); if(p) return p.id;
