@@ -834,7 +834,7 @@ async function publishMeetingToFeed(meeting){
 }
 
 /* ========================= state / helpers ========================= */
-const state={ people:[], meetings:[], remote:[], urls:new Map(), tagsByMeeting:null, tagsByImage:null };
+const state={ people:[], meetings:[], remote:[], urls:new Map(), avatarByPid:new Map(), avatarByName:new Map(), tagsByMeeting:null, tagsByImage:null };
 // Local meetings (with blobs) + server-only posts pulled for this signed-in user, newest first.
 // Local wins when both exist (it carries the tagged people); remote fills cross-device gaps.
 function allMeetings(){ return state.meetings.concat(state.remote||[]).sort((a,b)=>b.createdAt-a.createdAt); }
@@ -854,6 +854,19 @@ async function loadAll(){
   state.people=await dbGetAll("people");
   state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
   for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  indexLocalAvatars(state.people,state.meetings);
+}
+function indexLocalAvatars(people,meetings){
+  state.avatarByPid.clear(); state.avatarByName.clear();
+  const peopleById=new Map((people||[]).filter(p=>p&&p.id).map(p=>[p.id,p]));
+  for(const m of (meetings||[])){
+    if(!m||!m.photo) continue;
+    for(const pid of (m.personIds||[])){
+      if(!state.avatarByPid.has(pid)) state.avatarByPid.set(pid,m);
+      const p=peopleById.get(pid), k=p&&norm(p.name||"");
+      if(k&&!state.avatarByName.has(k)) state.avatarByName.set(k,m);
+    }
+  }
 }
 
 /* ========================= MET cloud merge (server is source of truth) =========================
@@ -951,16 +964,19 @@ const personById=id=>state.people.find(p=>p.id===id);
 const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
 // Avatar photo: match the first on-device version exactly — People avatars are the newest local
 // meeting Blob for that person. No remote presigned URLs and no onerror-to-initials mask.
-const latestPhotoFor=pid=>{ const m=state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo); return m?photoURL(m):""; };
+const latestPhotoFor=(pid,name)=>{ const byPid=state.avatarByPid.get(pid);
+  const byName=name?state.avatarByName.get(norm(name)):null;
+  const m=byPid||byName||state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo);
+  return m?photoURL(m):""; };
 function avaHTMLWithURL(p,av){ const name=String((p&&p.name)||"").trim()||"?";
   const c=pcolor(name);
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
   const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(name)}</div>`;
   return av?`<img class="ava" src="${esc(av)}" style="${ring}">`:fb; }
-function avaHTML(p){ const id=p&&p.id, av=id?latestPhotoFor(id):""; return avaHTMLWithURL(p,av); }
+function avaHTML(p){ const id=p&&p.id, av=id?latestPhotoFor(id,p&&p.name):""; return avaHTMLWithURL(p,av); }
 function refreshPeopleAvatars(){ const grid=document.getElementById("peopleGrid"); if(!grid) return 0; let fixed=0;
   grid.querySelectorAll(".person[data-pid]").forEach(card=>{ try{
-    const p=personById(card.dataset.pid), av=p&&latestPhotoFor(p.id); if(!p||!av) return;
+    const p=personById(card.dataset.pid), av=p&&latestPhotoFor(p.id,p.name); if(!p||!av) return;
     const wrap=card.querySelector(".ava-wrap"), cur=wrap&&wrap.querySelector(".ava"); if(!wrap||!cur) return;
     if(cur.tagName==="IMG"&&cur.getAttribute("src")===av) return;
     cur.outerHTML=avaHTML(p); fixed++;
