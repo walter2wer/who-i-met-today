@@ -510,7 +510,8 @@ async function scanLocalDiary(){
       people.forEach(p=>{ if(p&&p.id&&!peopleById.has(p.id)) peopleById.set(p.id,p); });
       meetings.forEach(m=>{ if(!m||!m.id) return;
         const prev=meetingsById.get(m.id);
-        if(!prev || (!hasPhotoBlob(prev)&&hasPhotoBlob(m)) || (!prev.hiImageId&&m.hiImageId)) meetingsById.set(m.id,m);
+        const pt=prev?(prev.hiRescueSyncedAt||prev.hiSyncedAt||0):0, mt=m.hiRescueSyncedAt||m.hiSyncedAt||0;
+        if(!prev || (!hasPhotoBlob(prev)&&hasPhotoBlob(m)) || (!prev.hiImageId&&m.hiImageId) || mt>pt) meetingsById.set(m.id,m);
       });
     }catch(_){ all.push({db:name,people:0,err:1}); }
     try{ db.close(); }catch(_){}
@@ -574,6 +575,7 @@ async function showStorageDiag(){
 // shows which local DB they're in + a one-tap Sync, so the data is never invisible.
 function localPhotoCount(meetings){ return (meetings||[]).filter(hasPhotoBlob).length; }
 function pendingLocalPhotoCount(meetings){ return (meetings||[]).filter(m=>hasPhotoBlob(m)&&!m.hiImageId).length; }
+function rescuePendingPhotoCount(meetings){ return (meetings||[]).filter(m=>hasPhotoBlob(m)&&!m.hiRescueSyncedAt).length; }
 function _photoRescueFlag(){ return _migFlag()+":force_photos_v1"; }
 async function syncLocalDiaryToCloud(found,opt){
   opt=opt||{};
@@ -581,17 +583,19 @@ async function syncLocalDiaryToCloud(found,opt){
   found=found||await scanLocalDiary();
   const people=found.people||[], meetings=found.meetings||[];
   const photos=localPhotoCount(meetings);
+  const uploadPhotos=rescuePendingPhotoCount(meetings);
   if(!people.length && !meetings.length){ if(!opt.silent) toast("Nothing on this device to sync"); return null; }
   const btn=opt.button||null;
-  if(btn){ btn.disabled=true; btn.textContent=photos?`Uploading ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`; }
-  else if(!opt.silent){ toast(photos?`Uploading ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`); }
+  if(btn){ btn.disabled=true; btn.textContent=uploadPhotos?`Uploading ${people.length} people + ${uploadPhotos} photos...`:`Syncing ${people.length} people...`; }
+  else if(!opt.silent){ toast(uploadPhotos?`Uploading ${people.length} people + ${uploadPhotos} photos...`:`Syncing ${people.length} people...`); }
   const metaRes=await MET.importAll(people,meetings);
   const photoRes=await syncPendingPhotos(meetings,{force:true});
-  const photoOk=!photos || (photoRes&&photoRes.ok>=photos);
+  const photoOk=!uploadPhotos || (photoRes&&photoRes.ok>=photoRes.total);
   const metaAfterPhotos=photos?await MET.importAll(people,meetings):metaRes;
   const metaOk=!!metaAfterPhotos || !!metaRes || (!people.length&&!meetings.length);
   if(!photoOk || !metaOk){
-    if(btn){ btn.disabled=false; btn.textContent=!photoOk?"Photo upload failed - tap to retry":"Sync failed - tap to retry"; }
+    const ok=photoRes&&photoRes.ok||0, total=photoRes&&photoRes.total||uploadPhotos||photos;
+    if(btn){ btn.disabled=false; btn.textContent=!photoOk?`Photo upload failed (${ok}/${total}) - tap to retry`:"Sync failed - tap to retry"; }
     else if(!opt.silent) toast(!photoOk?"Photo upload failed - check your connection and try again":"Sync failed - check your connection and try again");
     return null;
   }
@@ -602,8 +606,8 @@ async function syncLocalDiaryToCloud(found,opt){
   try{ await loadAll(); }catch(_){}
   try{ renderAll(); }catch(_){}
   const uploaded=photoRes?photoRes.ok:0;
-  if(btn){ btn.textContent=photos?`Uploaded ${uploaded}/${photos} photos`:`Synced ${people.length} people`; setTimeout(()=>{ try{ btn.closest("#migBanner").remove(); }catch(_){} },1600); }
-  else if(!opt.silent){ toast(photos?`Uploaded ${uploaded}/${photos} photos to the cloud`:`Synced ${people.length} people, ${meetings.length} moments to the cloud`); }
+  if(btn){ btn.textContent=uploadPhotos?`Uploaded ${uploaded}/${uploadPhotos} photos`:`Synced ${people.length} people`; setTimeout(()=>{ try{ btn.closest("#migBanner").remove(); }catch(_){} },1600); }
+  else if(!opt.silent){ toast(uploadPhotos?`Uploaded ${uploaded}/${uploadPhotos} photos to the cloud`:`Synced ${people.length} people, ${meetings.length} moments to the cloud`); }
   return {people:people.length,meetings:meetings.length,photos:uploaded,metaOk,photoOk};
 }
 async function showMigrateBanner(){
@@ -674,15 +678,49 @@ function blobDims(blob){ return new Promise(res=>{ try{ const u=URL.createObject
 function mimeOf(blob){ const t=(blob&&blob.type||"").toLowerCase();
   return (t==="image/jpeg"||t==="image/png"||t==="image/webp"||t==="image/gif")?t:"image/jpeg"; }
 function extFor(mime){ return ({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"})[mime]||"jpg"; }
+function loadBlobImage(blob){ return new Promise((res,rej)=>{ let u=""; try{ u=URL.createObjectURL(blob); const img=new Image();
+  img.onload=()=>{ try{ URL.revokeObjectURL(u); }catch(_){} res(img); };
+  img.onerror=()=>{ try{ URL.revokeObjectURL(u); }catch(_){} rej(new Error("image_decode_failed")); };
+  img.src=u; }catch(e){ try{ if(u) URL.revokeObjectURL(u); }catch(_){} rej(e); } }); }
+function canvasToBlob(canvas,mime,quality){ return new Promise(res=>{ try{ canvas.toBlob(b=>res(b),mime,quality); }catch(_){ res(null); } }); }
+async function prepareUploadBlob(blob,opt){
+  opt=opt||{}; const maxSide=opt.maxSide||1600, quality=opt.quality||0.78;
+  const originalMime=mimeOf(blob); let dims={w:0,h:0}; try{ dims=await blobDims(blob); }catch(_){}
+  const longest=Math.max(dims.w||0,dims.h||0);
+  if(!blob || !/^image\//i.test(blob.type||originalMime) || (blob.size<=900000 && longest<=maxSide)){
+    return {blob,mime:originalMime,dims,compressed:false,originalBytes:blob&&blob.size||0,bytes:blob&&blob.size||0};
+  }
+  try{
+    const img=await loadBlobImage(blob);
+    const iw=img.naturalWidth||img.width||dims.w||0, ih=img.naturalHeight||img.height||dims.h||0;
+    if(!iw||!ih) throw new Error("image_size_missing");
+    const scale=Math.min(1,maxSide/Math.max(iw,ih));
+    const w=Math.max(1,Math.round(iw*scale)), h=Math.max(1,Math.round(ih*scale));
+    const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
+    const ctx=canvas.getContext("2d"); if(!ctx) throw new Error("canvas_missing");
+    ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+    ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+    const out=await canvasToBlob(canvas,"image/jpeg",quality);
+    if(out && out.size && out.size<blob.size) return {blob:out,mime:"image/jpeg",dims:{w,h},compressed:true,originalBytes:blob.size||0,bytes:out.size};
+  }catch(_){}
+  return {blob,mime:originalMime,dims,compressed:false,originalBytes:blob&&blob.size||0,bytes:blob&&blob.size||0};
+}
+async function fetchWithTimeout(url,init,ms){
+  if(!ms || typeof AbortController==="undefined") return fetch(url,init);
+  const ctrl=new AbortController(), t=setTimeout(()=>{ try{ ctrl.abort(); }catch(_){} },ms);
+  try{ return await fetch(url,Object.assign({},init,{signal:ctrl.signal})); }
+  finally{ clearTimeout(t); }
+}
 // Upload one meeting's photo to the signed-in user's own Hi account. Returns oi_xxx or null.
 // Public vs private is decided ONCE here, from meeting.hiPublic (the choice made in the save
 // sheet). It cannot be changed afterward to ADD a post to the public feed.
 async function uploadMeetingPhoto(meeting,opt){
   opt=opt||{};
   if(!HI.authed() || !meeting || !meeting.photo || (!opt.force && meeting.hiImageId)) return meeting&&meeting.hiImageId||null;
-  const blob=meeting.photo, mime=mimeOf(blob);
+  const prepared=await prepareUploadBlob(meeting.photo,opt.force?{maxSide:1600,quality:.78}:{maxSide:1800,quality:.82});
+  const blob=prepared.blob, mime=prepared.mime;
   const wantPublic=!!meeting.hiPublic;   // default false → private diary only
-  let dims={w:0,h:0}; try{ dims=await blobDims(blob); }catch(_){}
+  const dims=prepared.dims||{w:0,h:0};
   // 1) presign — the public/private decision is LOCKED IN here:
   //    request_public_on_approve:true  → after AI approve, auto-public + enters /met feed.
   //    request_public_on_approve:false → stays private + pending; never reaches the feed,
@@ -697,7 +735,7 @@ async function uploadMeetingPhoto(meeting,opt){
   if(!imageId||!putUrl){ throw new Error("presign_missing_fields"); }
   // 2) PUT bytes straight to S3 with exactly the headers Hi told us to use.
   const headers=Object.assign({"content-type":mime}, up.required_headers||up.headers||{});
-  const put=await fetch(putUrl,{ method:"PUT", body:blob, headers });
+  const put=await fetchWithTimeout(putUrl,{ method:"PUT", body:blob, headers }, opt.timeoutMs||70000);
   if(!put.ok){ throw new Error("s3_put_"+put.status); }
   // 3) finalize — Hi HEADs the object + runs AI moderation. If wantPublic and the AI
   //    approves, the image auto-goes public + enters the /met feed within seconds. If
@@ -712,6 +750,7 @@ async function syncMeetingToHi(meeting,opt){
   try{
     const id=await uploadMeetingPhoto(meeting,opt);
     if(id){ meeting.hiImageId=id; meeting.hiSyncedAt=Date.now();
+      if(opt.force) meeting.hiRescueSyncedAt=meeting.hiSyncedAt;
       try{ await dbPut("meetings",meeting); }catch(_){}
       try{ await MET.putMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
     return id||null;
@@ -731,9 +770,9 @@ async function syncPendingPhotos(sourceMeetings,opt){
   if(_photoSyncRun) return _photoSyncRun;
   _photoSyncRun=(async()=>{
   const force=!!opt.force;
-  const pending=(sourceMeetings||state.meetings).filter(m=>hasPhotoBlob(m) && (force || !m.hiImageId));
+  const pending=(sourceMeetings||state.meetings).filter(m=>hasPhotoBlob(m) && (force ? !m.hiRescueSyncedAt : !m.hiImageId));
   if(!pending.length) return {total:0,ok:0};
-  const total=pending.length; let done=0, ok=0;
+  const total=pending.length; let done=0, ok=0, active=0;
   let el=document.getElementById("photoSyncBar");
   if(!el){ el=document.createElement("div"); el.id="photoSyncBar";
     el.style.cssText="position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 76px);z-index:99999;background:#111;color:#fff;"
@@ -742,16 +781,18 @@ async function syncPendingPhotos(sourceMeetings,opt){
       +"width:max-content;max-width:min(360px, calc(100vw - 28px))";
     document.body.appendChild(el); }
   const paint=()=>{ el.textContent = done<total
-    ? ("Uploading photos to the cloud... "+done+"/"+total+" - keep this page open")
+    ? ("Uploading optimized photos... "+done+"/"+total+(active?" - "+active+" active":"")+" - keep this page open")
     : ("Uploaded "+ok+"/"+total+" photos to the cloud"); };
   paint();
-  const CONC=4; let idx=0;
+  const CONC=2; let idx=0;
   async function worker(){ while(idx<pending.length){ const m=pending[idx++];
-    try{ if(await syncMeetingToHi(m,{force})) ok++; }catch(_){} done++; paint(); } }
+    active++; paint();
+    try{ if(await syncMeetingToHi(m,{force,timeoutMs:70000})) ok++; }catch(_){}
+    active=Math.max(0,active-1); done++; paint(); } }
   await Promise.all(Array.from({length:Math.min(CONC,pending.length)},()=>worker()));
   setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 3500);
   try{ renderAll(); }catch(_){}
-  return {total,ok};
+  return {total,ok,failed:total-ok};
   })();
   try{ return await _photoSyncRun; }
   finally{ _photoSyncRun=null; }
