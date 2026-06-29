@@ -565,7 +565,7 @@ async function showMigrateBanner(){
     if(!found.people.some(p=>p.id&&!onCloud.has(p.id))) return;   // all already synced
     const diag=found.all.map(x=>x.db+":"+(x.err?"err":x.people+"p")).join("  ");
     const el=document.createElement("div"); el.id="migBanner";
-    el.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;max-width:520px;margin:0 auto;z-index:70;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45";
+    el.style.cssText="position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);max-width:520px;margin:0 auto;z-index:70;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45";
     el.innerHTML=`<div style="font-weight:650;margin-bottom:3px">Found ${found.people.length} people in this browser</div><div style="opacity:.65;font-size:11.5px;margin-bottom:11px">${esc(diag)}</div><button id="migGo" class="btn" style="width:100%;background:#fff;color:var(--ink);font-weight:600">Sync ${found.people.length} to my account</button><button id="migX" style="width:100%;background:none;border:0;color:#fff;opacity:.6;margin-top:6px;font-size:12px;cursor:pointer">Not now</button>`;
     document.body.appendChild(el);
     document.getElementById("migX").onclick=()=>el.remove();
