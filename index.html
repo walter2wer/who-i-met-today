@@ -464,12 +464,20 @@ const MET={
     const CH=25;
     const send=async(p,m)=>{ try{ return await HI.post("/api/met/import",{
       persons:(p||[]).map(x=>this.personBody(x)), meetings:(m||[]).map(x=>this.meetingBody(x)) },true); }catch(_){ return null; } };
+    const onePerson=async p=>{ try{ return await this.putPerson(p); }catch(_){ return null; } };
+    const oneMeeting=async m=>{ try{ return await this.putMeeting(m); }catch(_){ return null; } };
     persons=persons||[]; meetings=meetings||[];
     if(!persons.length && !meetings.length) return await send([],[]);
-    let okAll=true;
-    for(let i=0;i<persons.length;i+=CH){ if(!await send(persons.slice(i,i+CH),[])) okAll=false; }
-    for(let i=0;i<meetings.length;i+=CH){ if(!await send([],meetings.slice(i,i+CH))) okAll=false; }
-    return okAll?{ok:true}:null; },
+    let attempted=0, ok=0;
+    for(let i=0;i<persons.length;i+=CH){ const chunk=persons.slice(i,i+CH); attempted+=chunk.length;
+      if(await send(chunk,[])){ ok+=chunk.length; continue; }
+      for(const p of chunk){ if(await onePerson(p)) ok++; }
+    }
+    for(let i=0;i<meetings.length;i+=CH){ const chunk=meetings.slice(i,i+CH); attempted+=chunk.length;
+      if(await send([],chunk)){ ok+=chunk.length; continue; }
+      for(const m of chunk){ if(await oneMeeting(m)) ok++; }
+    }
+    return ok?{ok:true,attempted,ok,partial:ok<attempted}:null; },
 };
 
 /* Write wrappers: local IndexedDB stays the must-succeed write; the cloud push is
@@ -575,16 +583,23 @@ async function syncLocalDiaryToCloud(found,opt){
   const btn=opt.button||null;
   if(btn){ btn.disabled=true; btn.textContent=photos?`Syncing ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`; }
   else if(!opt.silent){ toast(photos?`Syncing ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`); }
-  const res=await MET.importAll(people,meetings);
-  if(!res){ if(btn){ btn.disabled=false; btn.textContent="Sync failed - tap to retry"; } else if(!opt.silent) toast("Sync failed - check your connection and try again"); return null; }
-  localStorage.setItem(_migFlag(),String(Date.now()));
-  await syncPendingPhotos(meetings);
+  const metaRes=await MET.importAll(people,meetings);
+  const photoRes=await syncPendingPhotos(meetings);
+  const photoOk=!photos || (photoRes&&photoRes.ok>=photos);
+  const metaOk=!!metaRes || (!people.length&&!meetings.length);
+  if(!photoOk || (!metaOk && !photos)){
+    if(btn){ btn.disabled=false; btn.textContent=!photoOk?"Photo upload failed - tap to retry":"Sync failed - tap to retry"; }
+    else if(!opt.silent) toast(!photoOk?"Photo upload failed - check your connection and try again":"Sync failed - check your connection and try again");
+    return null;
+  }
+  if(metaOk && photoOk) localStorage.setItem(_migFlag(),String(Date.now()));
   try{ await mergeServerState(); }catch(_){}
   try{ await pullMyServerPosts(); }catch(_){}
   try{ renderAll(); }catch(_){}
-  if(btn){ btn.textContent=`Synced ${people.length} people + ${photos} photos`; setTimeout(()=>{ try{ btn.closest("#migBanner").remove(); }catch(_){} },1600); }
-  else if(!opt.silent){ toast(`Synced ${people.length} people, ${meetings.length} moments, ${photos} photos to the cloud`); }
-  return {people:people.length,meetings:meetings.length,photos};
+  const uploaded=photoRes?photoRes.ok:0;
+  if(btn){ btn.textContent=photos?`Uploaded ${uploaded}/${photos} photos`:`Synced ${people.length} people`; setTimeout(()=>{ try{ btn.closest("#migBanner").remove(); }catch(_){} },1600); }
+  else if(!opt.silent){ toast(photos?`Uploaded ${uploaded}/${photos} photos to the cloud`:`Synced ${people.length} people, ${meetings.length} moments to the cloud`); }
+  return {people:people.length,meetings:meetings.length,photos:uploaded,metaOk,photoOk};
 }
 async function showMigrateBanner(){
   try{ if(!HI.authed()||document.getElementById("migBanner")) return;
@@ -692,7 +707,8 @@ async function syncMeetingToHi(meeting){
   try{
     const id=await uploadMeetingPhoto(meeting);
     if(id){ meeting.hiImageId=id; meeting.hiSyncedAt=Date.now();
-      try{ await saveMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
+      try{ await dbPut("meetings",meeting); }catch(_){}
+      try{ await MET.putMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
     return id||null;
   }catch(e){ return null; /* offline / transient — local copy is intact, retried on next save or via syncPendingPhotos */ }
 }
@@ -703,10 +719,13 @@ async function syncMeetingToHi(meeting){
 // now concurrency-capped parallel + an on-screen progress bar so the user keeps the page open
 // until every photo lands. Idempotent: each meeting skips once it has an hiImageId, so re-running
 // resumes where it left off.
+let _photoSyncRun=null;
 async function syncPendingPhotos(sourceMeetings){
   if(!HI.authed()) return;
+  if(_photoSyncRun) return _photoSyncRun;
+  _photoSyncRun=(async()=>{
   const pending=(sourceMeetings||state.meetings).filter(m=>hasPhotoBlob(m) && !m.hiImageId);
-  if(!pending.length) return;
+  if(!pending.length) return {total:0,ok:0};
   const total=pending.length; let done=0, ok=0;
   let el=document.getElementById("photoSyncBar");
   if(!el){ el=document.createElement("div"); el.id="photoSyncBar";
@@ -725,6 +744,10 @@ async function syncPendingPhotos(sourceMeetings){
   await Promise.all(Array.from({length:Math.min(CONC,pending.length)},()=>worker()));
   setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 3500);
   try{ renderAll(); }catch(_){}
+  return {total,ok};
+  })();
+  try{ return await _photoSyncRun; }
+  finally{ _photoSyncRun=null; }
 }
 /* ========================= pull DOWN: server is the source of truth =========================
    When signed in, the server holds the canonical copy of the user's own photo posts. We list
