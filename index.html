@@ -593,8 +593,7 @@ async function syncLocalDiaryToCloud(found,opt){
     return null;
   }
   if(metaOk && photoOk) localStorage.setItem(_migFlag(),String(Date.now()));
-  try{ await mergeServerState(); }catch(_){}
-  try{ await pullMyServerPosts(); }catch(_){}
+  try{ await loadAll(); }catch(_){}
   try{ renderAll(); }catch(_){}
   const uploaded=photoRes?photoRes.ok:0;
   if(btn){ btn.textContent=photos?`Uploaded ${uploaded}/${photos} photos`:`Synced ${people.length} people`; setTimeout(()=>{ try{ btn.closest("#migBanner").remove(); }catch(_){} },1600); }
@@ -603,11 +602,8 @@ async function syncLocalDiaryToCloud(found,opt){
 }
 async function showMigrateBanner(){
   try{ if(!HI.authed()||document.getElementById("migBanner")) return;
-    const found=await scanLocalDiary(); if(!found.people.length) return;
-    const onCloud=new Set(state.people.map(p=>p.id));
-    const missingPeople=found.people.filter(p=>p.id&&!onCloud.has(p.id)).length;
+    const found=await scanLocalDiary(); if(!found.people.length&&!found.meetings.length) return;
     const pendingPhotos=pendingLocalPhotoCount(found.meetings);
-    if(!missingPeople && !pendingPhotos) return;   // all already synced
     const diag=found.all.map(x=>x.db+":"+(x.err?"err":x.people+"p/"+(x.withPhoto||0)+"photo")).join("  ");
     const el=document.createElement("div"); el.id="migBanner";
     el.style.cssText="position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);max-width:520px;margin:0 auto;z-index:70;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45";
@@ -877,9 +873,9 @@ async function publishMeetingToFeed(meeting){
 
 /* ========================= state / helpers ========================= */
 const state={ people:[], meetings:[], remote:[], urls:new Map(), avatarByPid:new Map(), avatarByName:new Map(), tagsByMeeting:null, tagsByImage:null };
-// Local meetings (with blobs) + server-only posts pulled for this signed-in user, newest first.
-// Local wins when both exist (it carries the tagged people); remote fills cross-device gaps.
-function allMeetings(){ return state.meetings.concat(state.remote||[]).sort((a,b)=>b.createdAt-a.createdAt); }
+// Rescue Hub: render only local browser IndexedDB records. Remote owner-images are intentionally
+// ignored here so stale presigned URLs cannot hide the original on-device photo Blobs.
+function allMeetings(){ return state.meetings.slice().sort((a,b)=>b.createdAt-a.createdAt); }
 const uid=()=>(Date.now().toString(36)+Math.random().toString(36).slice(2,8));
 const norm=s=>String(s||"").trim().toLowerCase().replace(/\s+/g," ");
 const esc=s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -898,8 +894,10 @@ function rebuildLocalPhotoURLs(meetings){
 }
 
 async function loadAll(){
-  state.people=await dbGetAll("people");
-  state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
+  const found=await scanLocalDiary();
+  state.people=(found.people||[]).filter(p=>p&&p.id);
+  state.meetings=(found.meetings||[]).filter(m=>m&&m.id).sort((a,b)=>b.createdAt-a.createdAt);
+  state.remote=[];
   rebuildLocalPhotoURLs(state.meetings);
   indexLocalAvatars(state.people,state.meetings);
 }
@@ -1013,18 +1011,17 @@ function networkMeetings(){
   return allMeetings().filter(m=>(m.personIds||[]).some(id=>known.has(id)));
 }
 const meetCount=pid=>networkMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
-// Avatar photo: local on-device Blob wins (including the initial local snapshot), then fall back to
-// the freshly-pulled remote owner-image URL for people whose current device has no local Blob yet.
+// Avatar photo: local on-device Blob only. This GitHub page is a rescue uploader; remote URLs belong
+// to hirey.ai/met and can expire, which is what produced the broken-image placeholders.
 const latestPhotoFor=(pid,name)=>{ const byPid=state.avatarByPid.get(pid);
   const byName=name?state.avatarByName.get(norm(name)):null;
-  const local=byPid||byName||state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo);
-  const m=local||allMeetings().find(m=>(m.personIds||[]).includes(pid)&&m.photoUrl);
+  const m=byPid||byName||state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo);
   return m?photoURL(m):""; };
 function avaHTMLWithURL(p,av){ const name=String((p&&p.name)||"").trim()||"?";
   const c=pcolor(name);
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
   const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(name)}</div>`;
-  return av?`<img class="ava" src="${esc(av)}" style="${ring}">`:fb; }
+  return av?`<img class="ava" src="${esc(av)}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
 function avaHTML(p){ const id=p&&p.id, av=id?latestPhotoFor(id,p&&p.name):""; return avaHTMLWithURL(p,av); }
 function refreshPeopleAvatars(){ const grid=document.getElementById("peopleGrid"); if(!grid) return 0; let fixed=0;
   grid.querySelectorAll(".person[data-pid]").forEach(card=>{ try{
@@ -1741,7 +1738,7 @@ async function importData(file){
   for(const p of ppl){ if(p&&p.id){ delete p.photo; try{ await dbPut("people",p); }catch(_){} } }
   for(const m of mts){ if(m&&m.id){ delete m.photo; try{ await dbPut("meetings",m); }catch(_){} } }
   await loadAll();
-  if(HI.authed()){ try{ await MET.importAll(state.people, state.meetings); }catch(_){} try{ await mergeServerState(); }catch(_){} }
+  if(HI.authed()){ try{ await MET.importAll(state.people, state.meetings); }catch(_){} }
   renderAll();
   toast(`Imported ${ppl.length} people, ${mts.length} moments`+(HI.authed()?" — synced to cloud":" — sign in to sync"));
 }
@@ -1765,7 +1762,7 @@ function renderAccount(){
       ${url?`<button class="row-link" id="acctView"><span>View my public page<span class="sub">${esc(url.replace(/^https?:\/\//,""))}</span></span>${CHEV}</button>`:""}
       <button class="row-link" id="acctExport"><span>Export my data<span class="sub">${state.people.length} people + ${allMeetings().length} moments &rarr; a file</span></span>${CHEV}</button>
       <button class="row-link" id="acctImport"><span>Import data<span class="sub">Bring people + moments from another device into this account</span></span>${CHEV}</button>
-      <button class="row-link" id="acctSync"><span>Sync this device to the cloud<span class="sub">Push this browser's ${state.people.length} people + moments up to your account</span></span>${CHEV}</button>
+      <button class="row-link" id="acctSync"><span>Upload this browser to HiRey<span class="sub">Push this local rescue diary: ${state.people.length} people + ${allMeetings().length} moments</span></span>${CHEV}</button>
       <button class="row-link" id="acctOut"><span>Sign out</span>${CHEV}</button>
       <p class="consent" style="margin-top:18px">Your diary stays on this device. Signing in only syncs your profile and lets the people you invite claim a real HiRey page.</p>`;
     document.getElementById("acctShare").onclick=shareMyCard;
@@ -1869,17 +1866,12 @@ async function finishAuth(tok){
   hideSheet("sheet","scrim"); renderAll(); updateMe();
   const nm=HI.myName(); toast(nm?("Signed in — welcome, "+nm.split(" ")[0]):"Signed in to HiRey");
   if(!HI.myName()) hiProfileEditor();
-  // Backfill local→server (structured records once + photos), then pull server→local so the app
-  // shows the same canonical data as /met, cross-device.
+  // Rescue Hub: do not auto merge/pull/upload after sign-in. First show the local diary;
+  // upload only when the user taps the banner/account action.
   (async()=>{
-    try{ await migrateLocalToServer(); }catch(_){}        // first-login: push local people/meetings up
-    try{ await mergeServerState(); renderAll(); }catch(_){} // pull people/tags/text-meetings down
-    try{ await showMigrateBanner(); }catch(_){}            // surface any local people not yet on the cloud
-    try{ await syncPendingPhotos(); }catch(_){}            // push any local-only photos up
-    try{ await pullMyServerPosts(); renderAll(); }catch(_){} // surface server-only photo posts
-    // Settle: one more render after all async work lands, so the People grid can never be left
-    // showing a render taken before photos/people were ready (stale-grid → initials bug).
-    setTimeout(()=>{ try{ renderAll(); startPeopleAvatarWatch(); }catch(_){} }, 1800);
+    try{ await loadAll(); renderAll(); }catch(_){}
+    try{ await showMigrateBanner(); }catch(_){}
+    setTimeout(()=>{ try{ renderAll(); startPeopleAvatarWatch(); }catch(_){} }, 900);
   })();
   startPeopleAvatarWatch();
   maybeOfferTextBind();
@@ -2134,17 +2126,9 @@ window._seedDemo=async function(){
 (async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); startPeopleAvatarWatch(); ensureMyName();
     if(/[?&]diag/.test(location.search)) showStorageDiag();   // ?diag → on-screen local-storage summary (people/moments/photos)
     if(HI.authed()){ (async()=>{ await hiSyncProfile(); await hiRefreshConsent();
-      // First-login on this device: push local people/meetings up (idempotent, once per account).
-      try{ await migrateLocalToServer(); }catch(_){}
-      // Server is the source of truth: pull people, tags, notes, and text meetings down.
-      try{ await mergeServerState(); renderAll(); }catch(_){}
-      try{ await showMigrateBanner(); }catch(_){}   // surface local people not yet on the cloud (any DB name)
-      // Then pull this user's own photo posts (private+public) — parallelized, render as they land.
-      try{ await pullMyServerPosts(); renderAll(); }catch(_){}
-      // Push any local-only photos up (no-op on a fresh device); local copies already render.
-      try{ await syncPendingPhotos(); renderAll(); }catch(_){}
-      // Settle: re-render once the async work has landed so the grid never stays on a too-early paint.
-      setTimeout(()=>{ try{ renderAll(); startPeopleAvatarWatch(); }catch(_){} }, 1800);
+      // Rescue Hub: stay local-only until the user explicitly taps Upload.
+      try{ await showMigrateBanner(); }catch(_){}
+      setTimeout(()=>{ try{ renderAll(); startPeopleAvatarWatch(); }catch(_){} }, 900);
       maybeOfferTextBind(); })(); } }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
