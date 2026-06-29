@@ -612,7 +612,7 @@ async function hiRefreshConsent(){ if(!HI.authed()) return;
   try{ const r=await HI.call("hi.connectors",{action:"list_met"}); HI.consent.clear();
     for(const m of (r.met||[])){ if(m.met_display_name) HI.consent.set(norm(m.met_display_name),{state:m.consent_state,intro_id:m.intro_id,pairing:m.resulting_pairing_id}); }
   }catch(_){} }
-function hiConsentFor(p){ if(!p) return null; return HI.consent.get(p.nameLower||norm(p.name))||null; }
+function hiConsentFor(p){ if(!p) return null; return HI.consent.get(p.nameLower||norm(p.name||""))||null; }
 
 /* ========================= server-side photo sync (hi.owner-images) =========================
    Offline-first: the photo always lives in IndexedDB. When signed in, we ALSO push a
@@ -839,9 +839,9 @@ const state={ people:[], meetings:[], remote:[], urls:new Map(), tagsByMeeting:n
 // Local wins when both exist (it carries the tagged people); remote fills cross-device gaps.
 function allMeetings(){ return state.meetings.concat(state.remote||[]).sort((a,b)=>b.createdAt-a.createdAt); }
 const uid=()=>(Date.now().toString(36)+Math.random().toString(36).slice(2,8));
-const norm=s=>s.trim().toLowerCase().replace(/\s+/g," ");
+const norm=s=>String(s||"").trim().toLowerCase().replace(/\s+/g," ");
 const esc=s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const initials=name=>{ const p=name.trim().split(/\s+/); return ((p[0]?.[0]||"")+(p[1]?.[0]||"")).toUpperCase()||"?"; };
+const initials=name=>{ const p=String(name||"").trim().split(/\s+/); return ((p[0]?.[0]||"")+(p[1]?.[0]||"")).toUpperCase()||"?"; };
 const PCOLORS=[
   {a:"#d18a00",d:"#8a5c00",g:"rgba(209,138,0,.42)",t:"rgba(209,138,0,.15)"},
   {a:"#2467e8",d:"#1b4fb8",g:"rgba(36,103,232,.40)",t:"rgba(36,103,232,.13)"},
@@ -969,9 +969,10 @@ const latestPhotoFor=pid=>{ const ms=allMeetings().filter(m=>(m.personIds||[]).i
   // on people who really had a photo on this device — see github.io migration).
   const loc=ms.find(m=>m.photo&&!m.remote); if(loc) return photoURL(loc);
   const rem=ms.find(m=>m.photoUrl); return rem?photoURL(rem):""; };
-function avaHTML(p){ const c=pcolor(p.name), av=latestPhotoFor(p.id);
+function avaHTML(p){ const name=String((p&&p.name)||"").trim()||"?", id=p&&p.id;
+  const c=pcolor(name), av=id?latestPhotoFor(id):"";
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
-  const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(p.name)}</div>`;
+  const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(name)}</div>`;
   // onerror → fall back to initials so a stale/broken photo URL never shows a broken-image "?".
   return av?`<img class="ava" src="${av}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
 
@@ -1150,7 +1151,7 @@ async function saveMoment(shareAfter){
 /* ========================= person detail ========================= */
 function openPerson(pid){ renderPerson(pid); showSheet("sheet2","scrim2"); }
 const CAD_DAYS={weekly:7,monthly:30,daily:1};
-function isDue(p){ if(!p.followCadence||p.followCadence==="off") return false; const d=CAD_DAYS[p.followCadence]||9999; return (Date.now()-(p.lastPing||p.createdAt||0))>=d*864e5; }
+function isDue(p){ if(!p||!p.followCadence||p.followCadence==="off") return false; const d=CAD_DAYS[p.followCadence]||9999; return (Date.now()-(p.lastPing||p.createdAt||0))>=d*864e5; }
 function parsePersonSpeech(text){ const out={}; const t=text;
   const em=t.replace(/\s+at\s+/gi,"@").replace(/\s+dot\s+/gi,".").match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(em) out.email=em[0];
   const ph=t.match(/(\+?\d[\d\s().\-]{6,}\d)/); if(ph) out.phone=ph[1].replace(/\s+/g," ").trim();
@@ -1386,16 +1387,25 @@ function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate
   document.getElementById("stMeetings").textContent=allMeetings().length;
   document.getElementById("stWeek").textContent=new Set(allMeetings().filter(m=>m.createdAt>=wk).flatMap(m=>m.personIds||[])).size;
   const el=document.getElementById("peopleGrid");
-  if(!state.people.length){ el.className=""; el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/></svg></div><h3>No one here yet</h3><p>Your circle grows each time you capture a face.</p></div>`; return; }
+  const people=(state.people||[]).filter(p=>p&&p.id);
+  if(!people.length){ el.className=""; el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/></svg></div><h3>No one here yet</h3><p>Your circle grows each time you capture a face.</p></div>`; return; }
   el.className="pgrid";
-  const sorted=state.people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)||b.createdAt-a.createdAt);
-  el.innerHTML=sorted.map((p,i)=>{ const ct=meetCount(p.id); const c=hiConsentFor(p);
+  const sorted=people.slice().sort((a,b)=>meetCount(b.id)-meetCount(a.id)||((b.createdAt||0)-(a.createdAt||0)));
+  el.innerHTML=sorted.map((p,i)=>{ try{ const ct=meetCount(p.id), name=String(p.name||"").trim()||"Someone"; const c=hiConsentFor(p);
     const dot=((c&&c.state==="approved")||p.hiOwner)?'<span class="dot hi"></span>':(p.invited||p.hiInvited)?'<span class="dot inv"></span>':((isDue(p)||p.followUp)?'<span class="dot"></span>':"");
     return `<div class="person" data-pid="${p.id}" style="animation-delay:${i*40}ms"><div class="ava-wrap">${avaHTML(p)}${dot}</div>
-      <div class="nm">${esc(p.name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`; }).join("");
+      <div class="nm">${esc(name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`;
+    }catch(e){ console.warn("People card render failed",p&&p.id,e); return ""; } }).join("");
   el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
 }
-function renderAll(){ renderToday(); renderDiary(); renderPeople(); document.getElementById("hdrCount").textContent=state.people.length; updateMe(); }
+function renderPart(name,fn){ try{ fn(); }catch(e){ console.warn("Render failed:",name,e); } }
+function renderAll(){
+  // A bad Today/Diary record must not leave People frozen on an earlier paint. Each surface renders
+  // independently so a healthy photo state always gets a chance to reach the People grid.
+  renderPart("today",renderToday); renderPart("diary",renderDiary); renderPart("people",renderPeople);
+  renderPart("header",()=>{ document.getElementById("hdrCount").textContent=state.people.length; });
+  renderPart("me",updateMe);
+}
 
 /* ========================= nav / capture wiring ========================= */
 function switchView(v){ document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="v-"+v));
