@@ -974,7 +974,20 @@ function avaHTML(p){ const name=String((p&&p.name)||"").trim()||"?", id=p&&p.id;
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
   const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(name)}</div>`;
   // onerror → fall back to initials so a stale/broken photo URL never shows a broken-image "?".
-  return av?`<img class="ava" src="${av}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
+  return av?`<img class="ava" src="${esc(av)}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
+function refreshPeopleAvatars(){ const grid=document.getElementById("peopleGrid"); if(!grid) return 0; let fixed=0;
+  grid.querySelectorAll(".person[data-pid]").forEach(card=>{ try{
+    const p=personById(card.dataset.pid), av=p&&latestPhotoFor(p.id); if(!p||!av) return;
+    const wrap=card.querySelector(".ava-wrap"), cur=wrap&&wrap.querySelector(".ava"); if(!wrap||!cur) return;
+    if(cur.tagName==="IMG"&&cur.getAttribute("src")===av) return;
+    cur.outerHTML=avaHTML(p); fixed++;
+  }catch(e){ console.warn("Avatar refresh failed",card&&card.dataset&&card.dataset.pid,e); } });
+  return fixed; }
+let _avaRefreshRun=0, _avaWatchTimer=null;
+function schedulePeopleAvatarRefresh(){ const token=++_avaRefreshRun;
+  [0,120,450,1200,2600,5200].forEach(ms=>setTimeout(()=>{ if(token===_avaRefreshRun) refreshPeopleAvatars(); },ms)); }
+function startPeopleAvatarWatch(){ if(_avaWatchTimer) return; let ticks=40;
+  _avaWatchTimer=setInterval(()=>{ try{ refreshPeopleAvatars(); }catch(_){} if(--ticks<=0){ clearInterval(_avaWatchTimer); _avaWatchTimer=null; } },750); }
 
 async function resolvePerson(name){ const n=norm(name); if(!n) return null;
   let p=state.people.find(p=>p.nameLower===n); if(p) return p.id;
@@ -1397,6 +1410,7 @@ function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate
       <div class="nm">${esc(name)}</div><div class="ct">${ct} moment${ct===1?"":"s"}</div></div>`;
     }catch(e){ console.warn("People card render failed",p&&p.id,e); return ""; } }).join("");
   el.querySelectorAll(".person").forEach(c=>c.onclick=()=>openPerson(c.dataset.pid));
+  schedulePeopleAvatarRefresh();
 }
 function renderPart(name,fn){ try{ fn(); }catch(e){ console.warn("Render failed:",name,e); } }
 function renderAll(){
@@ -1412,6 +1426,8 @@ function switchView(v){ document.querySelectorAll(".view").forEach(s=>s.classLis
   document.querySelectorAll(".tab[data-view]").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
   window.scrollTo({top:0,behavior:"smooth"}); }
 document.querySelectorAll(".tab[data-view]").forEach(t=>t.onclick=()=>switchView(t.dataset.view));
+window.addEventListener("pageshow",()=>{ try{ startPeopleAvatarWatch(); schedulePeopleAvatarRefresh(); }catch(_){} });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ try{ startPeopleAvatarWatch(); schedulePeopleAvatarRefresh(); }catch(_){} } });
 const _brand=document.querySelector("header .brand"); if(_brand){ _brand.style.cursor="pointer"; _brand.title="Your account"; _brand.onclick=openAccount; }
 document.getElementById("navAcct").onclick=openAccount;
 const fileCam=document.getElementById("fileCam"), fileLib=document.getElementById("fileLib");
@@ -1791,8 +1807,9 @@ async function finishAuth(tok){
     try{ await pullMyServerPosts(); renderAll(); }catch(_){} // surface server-only photo posts
     // Settle: one more render after all async work lands, so the People grid can never be left
     // showing a render taken before photos/people were ready (stale-grid → initials bug).
-    setTimeout(()=>{ try{ renderAll(); }catch(_){} }, 1800);
+    setTimeout(()=>{ try{ renderAll(); startPeopleAvatarWatch(); }catch(_){} }, 1800);
   })();
+  startPeopleAvatarWatch();
   maybeOfferTextBind();
 }
 
@@ -2042,7 +2059,7 @@ window._seedDemo=async function(){
   await loadAll(); renderAll(); toast("Demo data loaded"); console.log("seeded"); };
 
 /* ========================= boot ========================= */
-(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); ensureMyName();
+(async()=>{ try{ _db=await openDB(); await loadAll(); renderAll(); startPeopleAvatarWatch(); ensureMyName();
     if(/[?&]diag/.test(location.search)) showStorageDiag();   // ?diag → on-screen local-storage summary (people/moments/photos)
     if(HI.authed()){ (async()=>{ await hiSyncProfile(); await hiRefreshConsent();
       // First-login on this device: push local people/meetings up (idempotent, once per account).
@@ -2055,7 +2072,7 @@ window._seedDemo=async function(){
       // Push any local-only photos up (no-op on a fresh device); local copies already render.
       try{ await syncPendingPhotos(); renderAll(); }catch(_){}
       // Settle: re-render once the async work has landed so the grid never stays on a too-early paint.
-      setTimeout(()=>{ try{ renderAll(); }catch(_){} }, 1800);
+      setTimeout(()=>{ try{ renderAll(); startPeopleAvatarWatch(); }catch(_){} }, 1800);
       maybeOfferTextBind(); })(); } }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
