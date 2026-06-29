@@ -967,11 +967,12 @@ const photoURL=m=>{ if(!m) return ""; if(m.remote) return m.photoUrl||"";
   return u||""; };
 const personById=id=>state.people.find(p=>p.id===id);
 const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
-// Avatar photo: match the first on-device version exactly — People avatars are the newest local
-// meeting Blob for that person. No remote presigned URLs and no onerror-to-initials mask.
+// Avatar photo: local on-device Blob wins (including the initial local snapshot), then fall back to
+// the freshly-pulled remote owner-image URL for people whose current device has no local Blob yet.
 const latestPhotoFor=(pid,name)=>{ const byPid=state.avatarByPid.get(pid);
   const byName=name?state.avatarByName.get(norm(name)):null;
-  const m=byPid||byName||state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo);
+  const local=byPid||byName||state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo);
+  const m=local||allMeetings().find(m=>(m.personIds||[]).includes(pid)&&m.photoUrl);
   return m?photoURL(m):""; };
 function avaHTMLWithURL(p,av){ const name=String((p&&p.name)||"").trim()||"?";
   const c=pcolor(name);
