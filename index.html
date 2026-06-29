@@ -849,11 +849,16 @@ const PCOLORS=[
   {a:"#7c4dff",d:"#5b32c7",g:"rgba(124,77,255,.40)",t:"rgba(124,77,255,.14)"},
 ];
 const pcolor=seed=>{ let h=0; for(const c of (seed||"?")) h=(h*31+c.charCodeAt(0))>>>0; return PCOLORS[h%4]; };
+function rebuildLocalPhotoURLs(meetings){
+  // Freshen URLs without revoking old ones: older deployed code may have left revoked blob: strings
+  // in state.urls, and in-flight DOM images can still be using the previous live URL.
+  for(const m of (meetings||[])){ if(m&&m.photo){ try{ state.urls.set(m.id,URL.createObjectURL(m.photo)); }catch(_){} } }
+}
 
 async function loadAll(){
   state.people=await dbGetAll("people");
   state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
-  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  rebuildLocalPhotoURLs(state.meetings);
   indexLocalAvatars(state.people,state.meetings);
 }
 function indexLocalAvatars(people,meetings){
@@ -925,7 +930,7 @@ async function mergeServerState(){
   }
   state.meetings=Array.from(localMeet.values()).sort((a,b)=>b.createdAt-a.createdAt);
   // rebuild object URLs for any newly-cached meetings that happen to carry a Blob
-  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  rebuildLocalPhotoURLs(state.meetings);
   // -------- tags: stash maps, apply after pulls --------
   const byMeeting=new Map(), byImage=new Map();
   for(const t of (data.tags||[])){
@@ -991,12 +996,14 @@ async function refreshPeopleAvatarsFromDisk(){ const grid=document.getElementByI
   let fixed=0;
   for(const card of cards){ try{
     const pid=card.dataset.pid, m=byPid.get(pid), p=personById(pid); if(!m||!p) continue;
-    let u=state.urls.get(m.id); if(!u){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
+    const cur=card.querySelector(".ava-wrap .ava"); if(!cur) continue;
+    const broken=cur.tagName==="IMG"&&cur.complete&&cur.naturalWidth===0;
+    let u=state.urls.get(m.id);
+    if(!u||broken){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
     if(!u) continue;
     let mem=state.meetings.find(x=>x.id===m.id);
     if(mem&&!mem.photo) mem.photo=m.photo; else if(!mem){ state.meetings.push(m); state.meetings.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); }
-    const cur=card.querySelector(".ava-wrap .ava"); if(!cur) continue;
-    if(cur.tagName==="IMG"&&cur.getAttribute("src")===u) continue;
+    if(cur.tagName==="IMG"&&cur.getAttribute("src")===u&&!broken) continue;
     cur.outerHTML=avaHTMLWithURL(p,u); fixed++;
   }catch(e){ console.warn("Disk avatar refresh failed",card&&card.dataset&&card.dataset.pid,e); } }
   return fixed; }
