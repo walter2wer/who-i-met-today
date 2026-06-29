@@ -485,24 +485,30 @@ async function removeMeeting(id){ const r=await dbDel("meetings",id); if(HI.auth
 function _migFlag(){ const s=HI.session()||{}; return "wimt_migrated_v2_"+(s.customer_id||s.workspace_id||s.agent_id||"me"); }
 // Scan ALL IndexedDB databases on THIS origin (not just 'wimt-db'): an old app — e.g. the hub version
 // that wrote the user's original diary — may have used a different DB name, so its people live in a
-// database this app never opens. Returns the database with the most people + a per-DB breakdown.
+// database this app never opens. Returns a merged local diary + a per-DB breakdown.
+function hasPhotoBlob(m){ return !!(m&&m.photo&&(typeof Blob!=="undefined")&&(m.photo instanceof Blob||(m.photo&&m.photo.size))); }
 async function scanLocalDiary(){
   let dbs=[]; try{ dbs=await indexedDB.databases(); }catch(_){}
   if(!dbs||!dbs.length) dbs=[{name:DB_NAME}];
-  const all=[]; let best={people:[],meetings:[],db:""};
+  const all=[], peopleById=new Map(), meetingsById=new Map();
   for(const d of dbs){ const name=d&&d.name; if(!name) continue; let db;
     try{ db=await new Promise((ok,no)=>{ const r=indexedDB.open(name); r.onsuccess=()=>ok(r.result); r.onerror=()=>no(r.error); }); }catch(_){ all.push({db:name,people:0,err:1}); continue; }
     try{ const stores=[...db.objectStoreNames];
       const get=s=>new Promise(ok=>{ try{ const r=db.transaction(s,"readonly").objectStore(s).getAll(); r.onsuccess=()=>ok(r.result||[]); r.onerror=()=>ok([]); }catch(_){ ok([]); } });
       const people=stores.includes("people")?await get("people"):[];
       const meetings=stores.includes("meetings")?await get("meetings"):[];
-      const withPhoto=meetings.filter(m=>m&&m.photo&&(typeof Blob!=="undefined")&&(m.photo instanceof Blob||(m.photo&&m.photo.size))).length;
+      const withPhoto=meetings.filter(hasPhotoBlob).length;
       all.push({db:name,people:people.length,meetings:meetings.length,withPhoto});
-      if(people.length>best.people.length) best={people,meetings,db:name,withPhoto};
+      people.forEach(p=>{ if(p&&p.id&&!peopleById.has(p.id)) peopleById.set(p.id,p); });
+      meetings.forEach(m=>{ if(!m||!m.id) return;
+        const prev=meetingsById.get(m.id);
+        if(!prev || (!hasPhotoBlob(prev)&&hasPhotoBlob(m)) || (!prev.hiImageId&&m.hiImageId)) meetingsById.set(m.id,m);
+      });
     }catch(_){ all.push({db:name,people:0,err:1}); }
     try{ db.close(); }catch(_){}
   }
-  best.all=all; return best;
+  const people=[...peopleById.values()], meetings=[...meetingsById.values()];
+  return { people, meetings, db:"all", withPhoto:meetings.filter(hasPhotoBlob).length, all };
 }
 // Diagnostic (opt-in via ?diag): a one-line, on-screen summary of THIS device's local storage —
 // people / meetings / how many carry a photo Blob — so "are my photos actually on this device?"
@@ -558,48 +564,59 @@ async function showStorageDiag(){
 }
 // On-screen banner (mobile-friendly, no console) when this browser holds people not yet on the cloud:
 // shows which local DB they're in + a one-tap Sync, so the data is never invisible.
+function pendingLocalPhotoCount(meetings){ return (meetings||[]).filter(m=>hasPhotoBlob(m)&&!m.hiImageId).length; }
+async function syncLocalDiaryToCloud(found,opt){
+  opt=opt||{};
+  if(!HI.authed()){ toast("Sign in first to sync"); openAccount(); return null; }
+  found=found||await scanLocalDiary();
+  const people=found.people||[], meetings=found.meetings||[];
+  const photos=pendingLocalPhotoCount(meetings);
+  if(!people.length && !meetings.length){ if(!opt.silent) toast("Nothing on this device to sync"); return null; }
+  const btn=opt.button||null;
+  if(btn){ btn.disabled=true; btn.textContent=photos?`Syncing ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`; }
+  else if(!opt.silent){ toast(photos?`Syncing ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`); }
+  const res=await MET.importAll(people,meetings);
+  if(!res){ if(btn){ btn.disabled=false; btn.textContent="Sync failed - tap to retry"; } else if(!opt.silent) toast("Sync failed - check your connection and try again"); return null; }
+  localStorage.setItem(_migFlag(),String(Date.now()));
+  await syncPendingPhotos(meetings);
+  try{ await mergeServerState(); }catch(_){}
+  try{ await pullMyServerPosts(); }catch(_){}
+  try{ renderAll(); }catch(_){}
+  if(btn){ btn.textContent=`Synced ${people.length} people + ${photos} photos`; setTimeout(()=>{ try{ btn.closest("#migBanner").remove(); }catch(_){} },1600); }
+  else if(!opt.silent){ toast(`Synced ${people.length} people, ${meetings.length} moments, ${photos} photos to the cloud`); }
+  return {people:people.length,meetings:meetings.length,photos};
+}
 async function showMigrateBanner(){
   try{ if(!HI.authed()||document.getElementById("migBanner")) return;
     const found=await scanLocalDiary(); if(!found.people.length) return;
     const onCloud=new Set(state.people.map(p=>p.id));
-    if(!found.people.some(p=>p.id&&!onCloud.has(p.id))) return;   // all already synced
-    const diag=found.all.map(x=>x.db+":"+(x.err?"err":x.people+"p")).join("  ");
+    const missingPeople=found.people.filter(p=>p.id&&!onCloud.has(p.id)).length;
+    const pendingPhotos=pendingLocalPhotoCount(found.meetings);
+    if(!missingPeople && !pendingPhotos) return;   // all already synced
+    const diag=found.all.map(x=>x.db+":"+(x.err?"err":x.people+"p/"+(x.withPhoto||0)+"photo")).join("  ");
     const el=document.createElement("div"); el.id="migBanner";
     el.style.cssText="position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);max-width:520px;margin:0 auto;z-index:70;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45";
-    el.innerHTML=`<div style="font-weight:650;margin-bottom:3px">Found ${found.people.length} people in this browser</div><div style="opacity:.65;font-size:11.5px;margin-bottom:11px">${esc(diag)}</div><button id="migGo" class="btn" style="width:100%;background:#fff;color:var(--ink);font-weight:600">Sync ${found.people.length} to my account</button><button id="migX" style="width:100%;background:none;border:0;color:#fff;opacity:.6;margin-top:6px;font-size:12px;cursor:pointer">Not now</button>`;
+    el.innerHTML=`<div style="font-weight:650;margin-bottom:3px">Found ${found.people.length} people and ${pendingPhotos} local photos</div><div style="opacity:.65;font-size:11.5px;margin-bottom:11px">${esc(diag)}</div><button id="migGo" class="btn" style="width:100%;background:#fff;color:var(--ink);font-weight:600">Upload to my HiRey account</button><button id="migX" style="width:100%;background:none;border:0;color:#fff;opacity:.6;margin-top:6px;font-size:12px;cursor:pointer">Not now</button>`;
     document.body.appendChild(el);
     document.getElementById("migX").onclick=()=>el.remove();
-    document.getElementById("migGo").onclick=async()=>{ const g=document.getElementById("migGo"); g.disabled=true; g.textContent="Syncing…";
-      const res=await MET.importAll(found.people,found.meetings);
-      if(res){ localStorage.setItem(_migFlag(),String(Date.now())); try{ await mergeServerState(); renderAll(); }catch(_){} g.textContent="Synced "+found.people.length+" ✓"; setTimeout(()=>el.remove(),1600); }
-      else { g.disabled=false; g.textContent="Sync failed — tap to retry"; } };
+    document.getElementById("migGo").onclick=()=>syncLocalDiaryToCloud(found,{button:document.getElementById("migGo")});
   }catch(_){}
 }
 async function migrateLocalToServer(){
   if(!HI.authed()) return;
-  if(localStorage.getItem(_migFlag())) return;
   try{
     const found=await scanLocalDiary();
-    const people=found.people, meetings=found.meetings;
-    if(!people.length && !meetings.length){ localStorage.setItem(_migFlag(),String(Date.now())); return; }
-    // MET.importAll swallows errors → returns null on failure. ONLY mark migrated on a real success,
-    // else leave the flag unset so it retries next sign-in/boot (a failed first try must not poison it).
-    const res=await MET.importAll(people,meetings);
-    if(res){ localStorage.setItem(_migFlag(),String(Date.now())); toast(`Synced ${people.length} people to your account`); }
+    if(localStorage.getItem(_migFlag()) && !pendingLocalPhotoCount(found.meetings)) return;
+    if(!found.people.length && !found.meetings.length){ localStorage.setItem(_migFlag(),String(Date.now())); return; }
+    // Keep retrying until both metadata and photo blobs have landed.
+    await syncLocalDiaryToCloud(found,{silent:true});
   }catch(_){ /* leave the flag unset so we retry */ }
 }
 // Manual force-sync (ignores the migrated flag) — for "I'm signed in but my people aren't on the
 // cloud yet" (e.g. an old origin whose first auto-sync failed before CORS was live).
 async function forceSyncToCloud(){
-  if(!HI.authed()){ toast("Sign in first to sync"); openAccount(); return; }
   const found=await scanLocalDiary();   // scan ALL local DBs, not just wimt-db (old hub app uses another name)
-  const people=found.people, meetings=found.meetings;
-  if(!people.length && !meetings.length){ toast("Nothing on this device to sync"); return; }
-  toast(`Syncing ${people.length} people…`);
-  const res=await MET.importAll(people,meetings);
-  if(res){ localStorage.setItem(_migFlag(),String(Date.now())); try{ await mergeServerState(); renderAll(); }catch(_){}
-    toast(`Synced ${people.length} people, ${meetings.length} moments to the cloud`); }
-  else toast("Sync failed — check your connection and try again");
+  await syncLocalDiaryToCloud(found);
 }
 
 async function hiSyncProfile(){ if(!HI.authed()) return null;
@@ -671,12 +688,13 @@ async function uploadMeetingPhoto(meeting){
 }
 // Fire-and-forget after a local save: never blocks, never throws to the caller.
 async function syncMeetingToHi(meeting){
-  if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return;
+  if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return meeting&&meeting.hiImageId||null;
   try{
     const id=await uploadMeetingPhoto(meeting);
     if(id){ meeting.hiImageId=id; meeting.hiSyncedAt=Date.now();
       try{ await saveMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
-  }catch(e){ /* offline / transient — local copy is intact, retried on next save or via syncPendingPhotos */ }
+    return id||null;
+  }catch(e){ return null; /* offline / transient — local copy is intact, retried on next save or via syncPendingPhotos */ }
 }
 // Backfill: push any signed-in user's local photos that aren't on the server yet, so the photo
 // BYTES (not just names) reach the cloud and render on every device + on hirey.ai/met. Uploaded
@@ -685,24 +703,25 @@ async function syncMeetingToHi(meeting){
 // now concurrency-capped parallel + an on-screen progress bar so the user keeps the page open
 // until every photo lands. Idempotent: each meeting skips once it has an hiImageId, so re-running
 // resumes where it left off.
-async function syncPendingPhotos(){
+async function syncPendingPhotos(sourceMeetings){
   if(!HI.authed()) return;
-  const pending=state.meetings.filter(m=>m.photo && !m.hiImageId);
+  const pending=(sourceMeetings||state.meetings).filter(m=>hasPhotoBlob(m) && !m.hiImageId);
   if(!pending.length) return;
-  const total=pending.length; let done=0;
+  const total=pending.length; let done=0, ok=0;
   let el=document.getElementById("photoSyncBar");
   if(!el){ el=document.createElement("div"); el.id="photoSyncBar";
-    el.style.cssText="position:fixed;left:12px;right:12px;bottom:84px;z-index:99999;background:#111;color:#fff;"
-      +"padding:13px 16px;border-radius:14px;font:600 14px/1.45 system-ui,-apple-system,sans-serif;"
-      +"box-shadow:0 8px 28px rgba(0,0,0,.32);text-align:center";
+    el.style.cssText="position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 76px);z-index:99999;background:#111;color:#fff;"
+      +"padding:10px 14px;border-radius:14px;font:600 13px/1.35 system-ui,-apple-system,sans-serif;"
+      +"box-shadow:0 8px 28px rgba(0,0,0,.32);text-align:left;pointer-events:none;transform:translateX(-50%);"
+      +"width:max-content;max-width:min(360px, calc(100vw - 28px))";
     document.body.appendChild(el); }
   const paint=()=>{ el.textContent = done<total
-    ? ("☁️ Uploading your photos to the cloud… "+done+"/"+total+" · keep this page open")
-    : ("✓ All "+total+" photos are now in the cloud"); };
+    ? ("Uploading photos to the cloud... "+done+"/"+total+" - keep this page open")
+    : ("Uploaded "+ok+"/"+total+" photos to the cloud"); };
   paint();
   const CONC=4; let idx=0;
   async function worker(){ while(idx<pending.length){ const m=pending[idx++];
-    try{ await syncMeetingToHi(m); }catch(_){} done++; paint(); } }
+    try{ if(await syncMeetingToHi(m)) ok++; }catch(_){} done++; paint(); } }
   await Promise.all(Array.from({length:Math.min(CONC,pending.length)},()=>worker()));
   setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 3500);
   try{ renderAll(); }catch(_){}
