@@ -550,8 +550,9 @@ async function showStorageDiag(){
     const paint=()=>{ el.innerHTML='DISK — '+esc(line)+'<br>'+esc(memHealth())+' <span style="opacity:.55">· tap to close</span>'; };
     paint(); el.onclick=()=>{ try{ el.remove(); clearInterval(iv); }catch(_){} };
     document.body.appendChild(el);
-    // refresh the MEM line for ~16s so it captures the post-sign-in merge result
-    const iv=setInterval(()=>{ if(!document.body.contains(el)){ clearInterval(iv); return; } paint(); }, 1500);
+    // refresh for ~16s; ALSO force a renderAll each tick — if the grid was stale (rendered before
+    // the photos were ready), this re-renders it with the now-healthy state and the DOM line proves it.
+    const iv=setInterval(()=>{ if(!document.body.contains(el)){ clearInterval(iv); return; } try{ renderAll(); }catch(_){} paint(); }, 1500);
     setTimeout(()=>{ try{ clearInterval(iv); el.remove(); }catch(_){} }, 30000);
   }catch(_){}
 }
@@ -1778,6 +1779,9 @@ async function finishAuth(tok){
     try{ await showMigrateBanner(); }catch(_){}            // surface any local people not yet on the cloud
     try{ await syncPendingPhotos(); }catch(_){}            // push any local-only photos up
     try{ await pullMyServerPosts(); renderAll(); }catch(_){} // surface server-only photo posts
+    // Settle: one more render after all async work lands, so the People grid can never be left
+    // showing a render taken before photos/people were ready (stale-grid → initials bug).
+    setTimeout(()=>{ try{ renderAll(); }catch(_){} }, 1800);
   })();
   maybeOfferTextBind();
 }
@@ -2040,6 +2044,8 @@ window._seedDemo=async function(){
       try{ await pullMyServerPosts(); renderAll(); }catch(_){}
       // Push any local-only photos up (no-op on a fresh device); local copies already render.
       try{ await syncPendingPhotos(); renderAll(); }catch(_){}
+      // Settle: re-render once the async work has landed so the grid never stays on a too-early paint.
+      setTimeout(()=>{ try{ renderAll(); }catch(_){} }, 1800);
       maybeOfferTextBind(); })(); } }
   catch(err){ document.querySelector("main").innerHTML=`<div class="empty"><h3>Storage unavailable</h3><p>Serve this over http:// (not file://) so your diary can be saved.</p></div>`; console.error(err); } })();
 </script>
