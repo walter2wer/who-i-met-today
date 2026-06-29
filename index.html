@@ -969,12 +969,13 @@ const latestPhotoFor=pid=>{ const ms=allMeetings().filter(m=>(m.personIds||[]).i
   // on people who really had a photo on this device — see github.io migration).
   const loc=ms.find(m=>m.photo&&!m.remote); if(loc) return photoURL(loc);
   const rem=ms.find(m=>m.photoUrl); return rem?photoURL(rem):""; };
-function avaHTML(p){ const name=String((p&&p.name)||"").trim()||"?", id=p&&p.id;
-  const c=pcolor(name), av=id?latestPhotoFor(id):"";
+function avaHTMLWithURL(p,av){ const name=String((p&&p.name)||"").trim()||"?";
+  const c=pcolor(name);
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
   const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(name)}</div>`;
   // onerror → fall back to initials so a stale/broken photo URL never shows a broken-image "?".
   return av?`<img class="ava" src="${esc(av)}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
+function avaHTML(p){ const id=p&&p.id, av=id?latestPhotoFor(id):""; return avaHTMLWithURL(p,av); }
 function refreshPeopleAvatars(){ const grid=document.getElementById("peopleGrid"); if(!grid) return 0; let fixed=0;
   grid.querySelectorAll(".person[data-pid]").forEach(card=>{ try{
     const p=personById(card.dataset.pid), av=p&&latestPhotoFor(p.id); if(!p||!av) return;
@@ -983,11 +984,29 @@ function refreshPeopleAvatars(){ const grid=document.getElementById("peopleGrid"
     cur.outerHTML=avaHTML(p); fixed++;
   }catch(e){ console.warn("Avatar refresh failed",card&&card.dataset&&card.dataset.pid,e); } });
   return fixed; }
+async function refreshPeopleAvatarsFromDisk(){ const grid=document.getElementById("peopleGrid"); if(!_db||!grid) return 0;
+  const cards=[...grid.querySelectorAll(".person[data-pid]")]; if(!cards.length) return 0;
+  let meetings=[]; try{ meetings=await dbGetAll("meetings"); }catch(_){ return 0; }
+  const byPid=new Map();
+  for(const m of meetings){ if(!m||!m.photo) continue;
+    for(const pid of (m.personIds||[])){ const prev=byPid.get(pid); if(!prev||(m.createdAt||0)>(prev.createdAt||0)) byPid.set(pid,m); } }
+  let fixed=0;
+  for(const card of cards){ try{
+    const pid=card.dataset.pid, m=byPid.get(pid), p=personById(pid); if(!m||!p) continue;
+    let u=state.urls.get(m.id); if(!u){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
+    if(!u) continue;
+    let mem=state.meetings.find(x=>x.id===m.id);
+    if(mem&&!mem.photo) mem.photo=m.photo; else if(!mem){ state.meetings.push(m); state.meetings.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); }
+    const cur=card.querySelector(".ava-wrap .ava"); if(!cur) continue;
+    if(cur.tagName==="IMG"&&cur.getAttribute("src")===u) continue;
+    cur.outerHTML=avaHTMLWithURL(p,u); fixed++;
+  }catch(e){ console.warn("Disk avatar refresh failed",card&&card.dataset&&card.dataset.pid,e); } }
+  return fixed; }
 let _avaRefreshRun=0, _avaWatchTimer=null;
 function schedulePeopleAvatarRefresh(){ const token=++_avaRefreshRun;
-  [0,120,450,1200,2600,5200].forEach(ms=>setTimeout(()=>{ if(token===_avaRefreshRun) refreshPeopleAvatars(); },ms)); }
+  [0,120,450,1200,2600,5200].forEach(ms=>setTimeout(()=>{ if(token===_avaRefreshRun){ refreshPeopleAvatars(); refreshPeopleAvatarsFromDisk(); } },ms)); }
 function startPeopleAvatarWatch(){ if(_avaWatchTimer) return; let ticks=40;
-  _avaWatchTimer=setInterval(()=>{ try{ refreshPeopleAvatars(); }catch(_){} if(--ticks<=0){ clearInterval(_avaWatchTimer); _avaWatchTimer=null; } },750); }
+  _avaWatchTimer=setInterval(()=>{ try{ refreshPeopleAvatars(); refreshPeopleAvatarsFromDisk(); }catch(_){} if(--ticks<=0){ clearInterval(_avaWatchTimer); _avaWatchTimer=null; } },750); }
 
 async function resolvePerson(name){ const n=norm(name); if(!n) return null;
   let p=state.people.find(p=>p.nameLower===n); if(p) return p.id;
