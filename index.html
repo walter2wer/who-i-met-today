@@ -522,13 +522,27 @@ async function showStorageDiag(){
       analysis=" || links: "+peopleWithPhoto+"/"+ppl.length+" people show a photo, "+orphan+" orphan photos";
     }catch(_){}
     const line=((f.all||[]).map(x=>x.db+": "+(x.err?"err":(x.people+" people / "+x.meetings+" moments / "+(x.withPhoto||0)+" with photo"))).join("   ·   ")||"no local databases")+analysis;
+    // In-memory health = what actually RENDERS (after the sign-in merge), vs the disk line above.
+    // If MEM shows 0 photos / 0 linked while disk is healthy, the merge dropped the link in memory.
+    const memHealth=()=>{ try{
+      const P=state.people||[], LM=state.meetings||[], R=state.remote||[];
+      const lp=LM.filter(m=>m&&m.photo);
+      const linkedPpl=P.filter(p=>p&&p.id&&lp.some(m=>(m.personIds||[]).includes(p.id))).length;
+      const noPhoto=P.find(p=>p&&p.id&&!lp.some(m=>(m.personIds||[]).includes(p.id)));
+      let ex="";
+      if(noPhoto){ const mm=LM.filter(m=>(m.personIds||[]).includes(noPhoto.id));
+        ex=" | ex \""+String(noPhoto.name||"?").slice(0,10)+"\"["+String(noPhoto.id).slice(0,6)+"] mtgs="+mm.length+" anyPhoto="+mm.some(m=>!!m.photo); }
+      return "MEM "+P.length+"ppl / "+LM.length+"local("+lp.length+"📷) / "+R.length+"remote / "+linkedPpl+" linked"+ex;
+    }catch(e){ return "MEM err "+e; } };
     const el=document.createElement("div"); el.id="storeDiag";
-    el.style.cssText="position:fixed;left:10px;right:10px;top:10px;z-index:99998;background:#111;color:#fff;padding:11px 14px;"
-      +"border-radius:12px;font:600 12.5px/1.45 system-ui,-apple-system,sans-serif;text-align:center;box-shadow:0 6px 22px rgba(0,0,0,.3)";
-    el.innerHTML='This device — '+esc(line)+' <span style="opacity:.55">· tap to close</span>';
-    el.onclick=()=>{ try{ el.remove(); }catch(_){} };
+    el.style.cssText="position:fixed;left:8px;right:8px;top:8px;z-index:99998;background:#111;color:#fff;padding:11px 13px;"
+      +"border-radius:12px;font:600 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 6px 22px rgba(0,0,0,.3)";
+    const paint=()=>{ el.innerHTML='DISK — '+esc(line)+'<br>'+esc(memHealth())+' <span style="opacity:.55">· tap to close</span>'; };
+    paint(); el.onclick=()=>{ try{ el.remove(); clearInterval(iv); }catch(_){} };
     document.body.appendChild(el);
-    setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 20000);
+    // refresh the MEM line for ~16s so it captures the post-sign-in merge result
+    const iv=setInterval(()=>{ if(!document.body.contains(el)){ clearInterval(iv); return; } paint(); }, 1500);
+    setTimeout(()=>{ try{ clearInterval(iv); el.remove(); }catch(_){} }, 30000);
   }catch(_){}
 }
 // On-screen banner (mobile-friendly, no console) when this browser holds people not yet on the cloud:
