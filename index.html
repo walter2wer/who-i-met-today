@@ -853,11 +853,8 @@ const pcolor=seed=>{ let h=0; for(const c of (seed||"?")) h=(h*31+c.charCodeAt(0
 async function loadAll(){
   state.people=await dbGetAll("people");
   state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
-  // Build object URLs for local photo Blobs WITHOUT revoking existing ones. Revoking mid-session
-  // (this runs again after the sign-in merge) can kill a blob: URL that an in-flight <img> on the
-  // People grid is still loading → its onerror fires → it falls back to initials even though the
-  // photo is fine. Stable, append-only URLs + lazy creation in photoURL = avatars render reliably.
-  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
+  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
 }
 
 /* ========================= MET cloud merge (server is source of truth) =========================
@@ -916,11 +913,8 @@ async function mergeServerState(){
   }
   state.meetings=Array.from(localMeet.values()).sort((a,b)=>b.createdAt-a.createdAt);
   // rebuild object URLs for any newly-cached meetings that happen to carry a Blob
-  // Build object URLs for local photo Blobs WITHOUT revoking existing ones. Revoking mid-session
-  // (this runs again after the sign-in merge) can kill a blob: URL that an in-flight <img> on the
-  // People grid is still loading → its onerror fires → it falls back to initials even though the
-  // photo is fine. Stable, append-only URLs + lazy creation in photoURL = avatars render reliably.
-  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
+  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
   // -------- tags: stash maps, apply after pulls --------
   const byMeeting=new Map(), byImage=new Map();
   for(const t of (data.tags||[])){
@@ -951,30 +945,17 @@ function applyMetTags(){
   }
 }
 // Local meetings carry an IndexedDB blob (object URL); remote-only posts carry a presigned URL.
-// Local meetings render from a stable object URL of their IndexedDB Blob. Build it LAZILY here
-// (not only in the up-front loops) so a meeting whose Blob is present but missing from state.urls
-// — e.g. loaded after the last build pass — still shows its photo instead of falling to initials.
-const photoURL=m=>{ if(!m) return ""; if(m.remote) return m.photoUrl||"";
-  let u=state.urls.get(m.id);
-  if(!u && m.photo){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
-  return u||""; };
+const photoURL=m=>(m&&m.remote?(m.photoUrl||""):(state.urls.get(m&&m.id)||""));
 const personById=id=>state.people.find(p=>p.id===id);
 const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
-// Avatar photo: only a LOCAL Blob (stable object URL). Skip remote/server posts — their presigned
-// URLs expire, leaving a broken "?" image on the People circles. No local photo → initials.
-const latestPhotoFor=pid=>{ const ms=allMeetings().filter(m=>(m.personIds||[]).includes(pid));
-  // Prefer a LOCAL Blob (stable object URL — e.g. the original on-device diary's photos). Only fall
-  // back to a remote owner-image post's presigned URL when there's no local photo, because a remote
-  // post that happens to be more recent must NOT hide an existing local Blob (that bug showed initials
-  // on people who really had a photo on this device — see github.io migration).
-  const loc=ms.find(m=>m.photo&&!m.remote); if(loc) return photoURL(loc);
-  const rem=ms.find(m=>m.photoUrl); return rem?photoURL(rem):""; };
+// Avatar photo: match the first on-device version exactly — People avatars are the newest local
+// meeting Blob for that person. No remote presigned URLs and no onerror-to-initials mask.
+const latestPhotoFor=pid=>{ const m=state.meetings.find(m=>(m.personIds||[]).includes(pid)&&m.photo); return m?photoURL(m):""; };
 function avaHTMLWithURL(p,av){ const name=String((p&&p.name)||"").trim()||"?";
   const c=pcolor(name);
   const ring=`box-shadow:0 0 0 2.5px ${c.a}, 0 4px 15px ${c.g}`;
   const fb=`<div class="ava ava-fb" style="background:${c.t};color:${c.d};${ring}">${initials(name)}</div>`;
-  // onerror → fall back to initials so a stale/broken photo URL never shows a broken-image "?".
-  return av?`<img class="ava" src="${esc(av)}" style="${ring}" data-fb="${esc(fb)}" onerror="this.outerHTML=this.dataset.fb">`:fb; }
+  return av?`<img class="ava" src="${esc(av)}" style="${ring}">`:fb; }
 function avaHTML(p){ const id=p&&p.id, av=id?latestPhotoFor(id):""; return avaHTMLWithURL(p,av); }
 function refreshPeopleAvatars(){ const grid=document.getElementById("peopleGrid"); if(!grid) return 0; let fixed=0;
   grid.querySelectorAll(".person[data-pid]").forEach(card=>{ try{
