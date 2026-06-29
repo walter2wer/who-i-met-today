@@ -1008,7 +1008,11 @@ const photoURL=m=>{ if(!m) return ""; if(m.remote) return m.photoUrl||"";
   if(!u&&m.photo){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
   return u||""; };
 const personById=id=>state.people.find(p=>p.id===id);
-const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
+function networkMeetings(){
+  const known=new Set((state.people||[]).map(p=>p.id));
+  return allMeetings().filter(m=>(m.personIds||[]).some(id=>known.has(id)));
+}
+const meetCount=pid=>networkMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
 // Avatar photo: local on-device Blob wins (including the initial local snapshot), then fall back to
 // the freshly-pulled remote owner-image URL for people whose current device has no local Blob yet.
 const latestPhotoFor=(pid,name)=>{ const byPid=state.avatarByPid.get(pid);
@@ -1463,9 +1467,10 @@ function renderDiary(){ const el=document.getElementById("diaryList");
     return `<div class="day-label"><span class="d">${k}</span><span class="c">${n||"0"} ${n===1?"person":"people"}</span></div>${ms.map(m=>meetingCardHTML(m,i++)).join("")}`;
   }).join(""); wireCards(el); }
 function renderPeople(){ const wk=(()=>{ const d=new Date(); d.setDate(d.getDate()-7); return d.getTime(); })();
+  const network=networkMeetings();
   document.getElementById("stPeople").textContent=state.people.length;
-  document.getElementById("stMeetings").textContent=allMeetings().length;
-  document.getElementById("stWeek").textContent=new Set(allMeetings().filter(m=>m.createdAt>=wk).flatMap(m=>m.personIds||[])).size;
+  document.getElementById("stMeetings").textContent=network.length;
+  document.getElementById("stWeek").textContent=new Set(network.filter(m=>m.createdAt>=wk).flatMap(m=>m.personIds||[]).filter(id=>personById(id))).size;
   const el=document.getElementById("peopleGrid");
   const people=(state.people||[]).filter(p=>p&&p.id);
   if(!people.length){ el.className=""; el.innerHTML=`<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/></svg></div><h3>No one here yet</h3><p>Your circle grows each time you capture a face.</p></div>`; return; }
