@@ -529,10 +529,20 @@ async function showStorageDiag(){
       const lp=LM.filter(m=>m&&m.photo);
       const linkedPpl=P.filter(p=>p&&p.id&&lp.some(m=>(m.personIds||[]).includes(p.id))).length;
       const noPhoto=P.find(p=>p&&p.id&&!lp.some(m=>(m.personIds||[]).includes(p.id)));
+      // DOM layer: what the People grid actually rendered (img vs initials, and did the imgs load?)
+      let dom="";
+      try{ const avs=[].slice.call(document.querySelectorAll('.person .ava'));
+        const imgs=avs.filter(a=>a.tagName==='IMG');
+        const ok=imgs.filter(a=>a.complete&&a.naturalWidth>0).length;
+        const broken=imgs.filter(a=>a.complete&&a.naturalWidth===0).length;
+        dom=" | DOM "+avs.length+"ava/"+imgs.length+"img("+ok+"ok,"+broken+"broken)";
+      }catch(_){}
+      // first person WITH a local photo (should render an img) — what does latestPhotoFor give it?
       let ex="";
-      if(noPhoto){ const mm=LM.filter(m=>(m.personIds||[]).includes(noPhoto.id));
-        ex=" | ex \""+String(noPhoto.name||"?").slice(0,10)+"\"["+String(noPhoto.id).slice(0,6)+"] mtgs="+mm.length+" anyPhoto="+mm.some(m=>!!m.photo); }
-      return "MEM "+P.length+"ppl / "+LM.length+"local("+lp.length+"📷) / "+R.length+"remote / "+linkedPpl+" linked"+ex;
+      const withP=P.find(p=>p&&p.id&&lp.some(m=>(m.personIds||[]).includes(p.id)));
+      if(withP){ let r=""; try{ r=latestPhotoFor(withP.id)||""; }catch(e){ r="err"; }
+        ex=" | ex \""+String(withP.name||"?").slice(0,9)+"\" lpf="+(r?r.slice(0,12):"EMPTY"); }
+      return "MEM "+P.length+"ppl / "+LM.length+"local("+lp.length+"📷) / "+R.length+"remote / "+linkedPpl+" linked"+dom+ex;
     }catch(e){ return "MEM err "+e; } };
     const el=document.createElement("div"); el.id="storeDiag";
     el.style.cssText="position:fixed;left:8px;right:8px;top:8px;z-index:99998;background:#111;color:#fff;padding:11px 13px;"
@@ -842,8 +852,11 @@ const pcolor=seed=>{ let h=0; for(const c of (seed||"?")) h=(h*31+c.charCodeAt(0
 async function loadAll(){
   state.people=await dbGetAll("people");
   state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
-  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
-  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  // Build object URLs for local photo Blobs WITHOUT revoking existing ones. Revoking mid-session
+  // (this runs again after the sign-in merge) can kill a blob: URL that an in-flight <img> on the
+  // People grid is still loading → its onerror fires → it falls back to initials even though the
+  // photo is fine. Stable, append-only URLs + lazy creation in photoURL = avatars render reliably.
+  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
 }
 
 /* ========================= MET cloud merge (server is source of truth) =========================
@@ -902,8 +915,11 @@ async function mergeServerState(){
   }
   state.meetings=Array.from(localMeet.values()).sort((a,b)=>b.createdAt-a.createdAt);
   // rebuild object URLs for any newly-cached meetings that happen to carry a Blob
-  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
-  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  // Build object URLs for local photo Blobs WITHOUT revoking existing ones. Revoking mid-session
+  // (this runs again after the sign-in merge) can kill a blob: URL that an in-flight <img> on the
+  // People grid is still loading → its onerror fires → it falls back to initials even though the
+  // photo is fine. Stable, append-only URLs + lazy creation in photoURL = avatars render reliably.
+  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
   // -------- tags: stash maps, apply after pulls --------
   const byMeeting=new Map(), byImage=new Map();
   for(const t of (data.tags||[])){
