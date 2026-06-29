@@ -853,8 +853,7 @@ const pcolor=seed=>{ let h=0; for(const c of (seed||"?")) h=(h*31+c.charCodeAt(0
 async function loadAll(){
   state.people=await dbGetAll("people");
   state.meetings=(await dbGetAll("meetings")).sort((a,b)=>b.createdAt-a.createdAt);
-  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
-  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
 }
 
 /* ========================= MET cloud merge (server is source of truth) =========================
@@ -913,8 +912,7 @@ async function mergeServerState(){
   }
   state.meetings=Array.from(localMeet.values()).sort((a,b)=>b.createdAt-a.createdAt);
   // rebuild object URLs for any newly-cached meetings that happen to carry a Blob
-  for(const [,u] of state.urls) URL.revokeObjectURL(u); state.urls.clear();
-  for(const m of state.meetings){ if(m.photo) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
+  for(const m of state.meetings){ if(m.photo && !state.urls.has(m.id)) state.urls.set(m.id,URL.createObjectURL(m.photo)); }
   // -------- tags: stash maps, apply after pulls --------
   const byMeeting=new Map(), byImage=new Map();
   for(const t of (data.tags||[])){
@@ -945,7 +943,10 @@ function applyMetTags(){
   }
 }
 // Local meetings carry an IndexedDB blob (object URL); remote-only posts carry a presigned URL.
-const photoURL=m=>(m&&m.remote?(m.photoUrl||""):(state.urls.get(m&&m.id)||""));
+const photoURL=m=>{ if(!m) return ""; if(m.remote) return m.photoUrl||"";
+  let u=state.urls.get(m.id);
+  if(!u&&m.photo){ try{ u=URL.createObjectURL(m.photo); state.urls.set(m.id,u); }catch(_){} }
+  return u||""; };
 const personById=id=>state.people.find(p=>p.id===id);
 const meetCount=pid=>allMeetings().filter(m=>(m.personIds||[]).includes(pid)).length;
 // Avatar photo: match the first on-device version exactly — People avatars are the newest local
