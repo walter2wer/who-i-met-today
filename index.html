@@ -572,27 +572,33 @@ async function showStorageDiag(){
 }
 // On-screen banner (mobile-friendly, no console) when this browser holds people not yet on the cloud:
 // shows which local DB they're in + a one-tap Sync, so the data is never invisible.
+function localPhotoCount(meetings){ return (meetings||[]).filter(hasPhotoBlob).length; }
 function pendingLocalPhotoCount(meetings){ return (meetings||[]).filter(m=>hasPhotoBlob(m)&&!m.hiImageId).length; }
+function _photoRescueFlag(){ return _migFlag()+":force_photos_v1"; }
 async function syncLocalDiaryToCloud(found,opt){
   opt=opt||{};
   if(!HI.authed()){ toast("Sign in first to sync"); openAccount(); return null; }
   found=found||await scanLocalDiary();
   const people=found.people||[], meetings=found.meetings||[];
-  const photos=pendingLocalPhotoCount(meetings);
+  const photos=localPhotoCount(meetings);
   if(!people.length && !meetings.length){ if(!opt.silent) toast("Nothing on this device to sync"); return null; }
   const btn=opt.button||null;
-  if(btn){ btn.disabled=true; btn.textContent=photos?`Syncing ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`; }
-  else if(!opt.silent){ toast(photos?`Syncing ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`); }
+  if(btn){ btn.disabled=true; btn.textContent=photos?`Uploading ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`; }
+  else if(!opt.silent){ toast(photos?`Uploading ${people.length} people + ${photos} photos...`:`Syncing ${people.length} people...`); }
   const metaRes=await MET.importAll(people,meetings);
-  const photoRes=await syncPendingPhotos(meetings);
+  const photoRes=await syncPendingPhotos(meetings,{force:true});
   const photoOk=!photos || (photoRes&&photoRes.ok>=photos);
-  const metaOk=!!metaRes || (!people.length&&!meetings.length);
-  if(!photoOk || (!metaOk && !photos)){
+  const metaAfterPhotos=photos?await MET.importAll(people,meetings):metaRes;
+  const metaOk=!!metaAfterPhotos || !!metaRes || (!people.length&&!meetings.length);
+  if(!photoOk || !metaOk){
     if(btn){ btn.disabled=false; btn.textContent=!photoOk?"Photo upload failed - tap to retry":"Sync failed - tap to retry"; }
     else if(!opt.silent) toast(!photoOk?"Photo upload failed - check your connection and try again":"Sync failed - check your connection and try again");
     return null;
   }
-  if(metaOk && photoOk) localStorage.setItem(_migFlag(),String(Date.now()));
+  if(metaOk && photoOk){
+    localStorage.setItem(_migFlag(),String(Date.now()));
+    if(photos) localStorage.setItem(_photoRescueFlag(),String(Date.now()));
+  }
   try{ await loadAll(); }catch(_){}
   try{ renderAll(); }catch(_){}
   const uploaded=photoRes?photoRes.ok:0;
@@ -602,12 +608,13 @@ async function syncLocalDiaryToCloud(found,opt){
 }
 async function showMigrateBanner(){
   try{ if(!HI.authed()||document.getElementById("migBanner")) return;
+    if(localStorage.getItem(_photoRescueFlag())) return;
     const found=await scanLocalDiary(); if(!found.people.length&&!found.meetings.length) return;
-    const pendingPhotos=pendingLocalPhotoCount(found.meetings);
+    const photos=localPhotoCount(found.meetings);
     const diag=found.all.map(x=>x.db+":"+(x.err?"err":x.people+"p/"+(x.withPhoto||0)+"photo")).join("  ");
     const el=document.createElement("div"); el.id="migBanner";
     el.style.cssText="position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);max-width:520px;margin:0 auto;z-index:70;background:var(--ink);color:#fff;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45";
-    el.innerHTML=`<div style="font-weight:650;margin-bottom:3px">Found ${found.people.length} people and ${pendingPhotos} local photos</div><div style="opacity:.65;font-size:11.5px;margin-bottom:11px">${esc(diag)}</div><button id="migGo" class="btn" style="width:100%;background:#fff;color:var(--ink);font-weight:600">Upload to my HiRey account</button><button id="migX" style="width:100%;background:none;border:0;color:#fff;opacity:.6;margin-top:6px;font-size:12px;cursor:pointer">Not now</button>`;
+    el.innerHTML=`<div style="font-weight:650;margin-bottom:3px">Found ${found.people.length} people and ${photos} local photos</div><div style="opacity:.65;font-size:11.5px;margin-bottom:11px">${esc(diag)}</div><button id="migGo" class="btn" style="width:100%;background:#fff;color:var(--ink);font-weight:600">Upload to my HiRey account</button><button id="migX" style="width:100%;background:none;border:0;color:#fff;opacity:.6;margin-top:6px;font-size:12px;cursor:pointer">Not now</button>`;
     document.body.appendChild(el);
     document.getElementById("migX").onclick=()=>el.remove();
     document.getElementById("migGo").onclick=()=>syncLocalDiaryToCloud(found,{button:document.getElementById("migGo")});
@@ -670,8 +677,9 @@ function extFor(mime){ return ({"image/jpeg":"jpg","image/png":"png","image/webp
 // Upload one meeting's photo to the signed-in user's own Hi account. Returns oi_xxx or null.
 // Public vs private is decided ONCE here, from meeting.hiPublic (the choice made in the save
 // sheet). It cannot be changed afterward to ADD a post to the public feed.
-async function uploadMeetingPhoto(meeting){
-  if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return meeting&&meeting.hiImageId||null;
+async function uploadMeetingPhoto(meeting,opt){
+  opt=opt||{};
+  if(!HI.authed() || !meeting || !meeting.photo || (!opt.force && meeting.hiImageId)) return meeting&&meeting.hiImageId||null;
   const blob=meeting.photo, mime=mimeOf(blob);
   const wantPublic=!!meeting.hiPublic;   // default false → private diary only
   let dims={w:0,h:0}; try{ dims=await blobDims(blob); }catch(_){}
@@ -698,10 +706,11 @@ async function uploadMeetingPhoto(meeting){
   return imageId;
 }
 // Fire-and-forget after a local save: never blocks, never throws to the caller.
-async function syncMeetingToHi(meeting){
-  if(!HI.authed() || !meeting || !meeting.photo || meeting.hiImageId) return meeting&&meeting.hiImageId||null;
+async function syncMeetingToHi(meeting,opt){
+  opt=opt||{};
+  if(!HI.authed() || !meeting || !meeting.photo || (!opt.force && meeting.hiImageId)) return meeting&&meeting.hiImageId||null;
   try{
-    const id=await uploadMeetingPhoto(meeting);
+    const id=await uploadMeetingPhoto(meeting,opt);
     if(id){ meeting.hiImageId=id; meeting.hiSyncedAt=Date.now();
       try{ await dbPut("meetings",meeting); }catch(_){}
       try{ await MET.putMeeting(meeting); }catch(_){} }   // also pushes the new image_id to the cloud backend
@@ -716,11 +725,13 @@ async function syncMeetingToHi(meeting){
 // until every photo lands. Idempotent: each meeting skips once it has an hiImageId, so re-running
 // resumes where it left off.
 let _photoSyncRun=null;
-async function syncPendingPhotos(sourceMeetings){
+async function syncPendingPhotos(sourceMeetings,opt){
+  opt=opt||{};
   if(!HI.authed()) return;
   if(_photoSyncRun) return _photoSyncRun;
   _photoSyncRun=(async()=>{
-  const pending=(sourceMeetings||state.meetings).filter(m=>hasPhotoBlob(m) && !m.hiImageId);
+  const force=!!opt.force;
+  const pending=(sourceMeetings||state.meetings).filter(m=>hasPhotoBlob(m) && (force || !m.hiImageId));
   if(!pending.length) return {total:0,ok:0};
   const total=pending.length; let done=0, ok=0;
   let el=document.getElementById("photoSyncBar");
@@ -736,7 +747,7 @@ async function syncPendingPhotos(sourceMeetings){
   paint();
   const CONC=4; let idx=0;
   async function worker(){ while(idx<pending.length){ const m=pending[idx++];
-    try{ if(await syncMeetingToHi(m)) ok++; }catch(_){} done++; paint(); } }
+    try{ if(await syncMeetingToHi(m,{force})) ok++; }catch(_){} done++; paint(); } }
   await Promise.all(Array.from({length:Math.min(CONC,pending.length)},()=>worker()));
   setTimeout(()=>{ try{ el.remove(); }catch(_){} }, 3500);
   try{ renderAll(); }catch(_){}
